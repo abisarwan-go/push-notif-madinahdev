@@ -5,6 +5,7 @@
 
 generator client {
   provider = "prisma-client"
+  runtime = "cloudflare"
   output   = "../src/generated/prisma"
 }
 
@@ -12,9 +13,128 @@ datasource db {
   provider = "sqlite"
 }
 
-// Create a simple model database
 model User {
-  id    String @id  @default(uuid())
-  email String  @unique
-  name  String  @unique
+  id             String           @id @default(uuid())
+  email          String           @unique
+  name           String           @unique
+  memberships    TenantMember[]
+  ownedTenants   Tenant[]         @relation("TenantOwner")
+  notifications  Notification[]   @relation("NotificationAuthor")
+}
+
+model Tenant {
+  id             String         @id @default(uuid())
+  name           String
+  ownerUserId    String
+  dashboardToken String         @unique
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  owner          User           @relation("TenantOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  members        TenantMember[]
+  projects       Project[]
+}
+
+model TenantMember {
+  id         String   @id @default(uuid())
+  tenantId   String
+  userId     String
+  role       MemberRole @default(MEMBER)
+  createdAt  DateTime @default(now())
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+}
+
+model Project {
+  id             String           @id @default(uuid())
+  tenantId       String
+  name           String
+  slug           String
+  allowedOrigin  String?
+  vapidPublicKey String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscribers    Subscriber[]
+  notifications  Notification[]
+  apiKeys        ApiKey[]
+
+  @@unique([tenantId, slug])
+}
+
+model Subscriber {
+  id          String            @id @default(uuid())
+  projectId   String
+  endpoint    String            @unique
+  p256dh      String
+  auth        String
+  userAgent   String?
+  status      SubscriberStatus  @default(ACTIVE)
+  createdAt   DateTime          @default(now())
+  lastSeenAt  DateTime          @default(now())
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deliveries  DeliveryLog[]
+}
+
+model Notification {
+  id          String              @id @default(uuid())
+  projectId   String
+  createdById String?
+  title       String
+  body        String
+  url         String?
+  status      NotificationStatus  @default(QUEUED)
+  createdAt   DateTime            @default(now())
+  sentAt      DateTime?
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User?               @relation("NotificationAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  deliveries  DeliveryLog[]
+}
+
+model DeliveryLog {
+  id             String          @id @default(uuid())
+  notificationId String
+  subscriberId   String
+  status         DeliveryStatus
+  errorCode      String?
+  errorMessage   String?
+  createdAt      DateTime        @default(now())
+  notification   Notification    @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  subscriber     Subscriber      @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  projectId  String
+  name       String
+  hashedKey  String    @unique
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum SubscriberStatus {
+  ACTIVE
+  INACTIVE
+  INVALID
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  PARTIAL
+  FAILED
+}
+
+enum DeliveryStatus {
+  SENT
+  FAILED
 }
