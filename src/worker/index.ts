@@ -88,18 +88,50 @@ function toBytes(value: string): Uint8Array {
 }
 
 function derToJose(der: Uint8Array, joseSize: number): Uint8Array {
-	let offset = 3;
-	const rLen = der[3];
-	let r = der.slice(4, 4 + rLen);
-	offset = 4 + rLen + 1;
-	const sLen = der[offset];
-	let s = der.slice(offset + 1, offset + 1 + sLen);
+	// Some runtimes may already return raw JOSE (r||s).
+	if (der.length === joseSize) return der;
 
-	while (r.length > joseSize / 2 && r[0] === 0) r = r.slice(1);
-	while (s.length > joseSize / 2 && s[0] === 0) s = s.slice(1);
+	const half = joseSize / 2;
+	let offset = 0;
+
+	const readLen = () => {
+		const first = der[offset++];
+		if (first === undefined) throw new Error("Invalid ECDSA signature: unexpected end");
+		if ((first & 0x80) === 0) return first;
+		const byteCount = first & 0x7f;
+		if (byteCount === 0 || byteCount > 2) {
+			throw new Error("Invalid ECDSA signature: unsupported DER length");
+		}
+		let len = 0;
+		for (let i = 0; i < byteCount; i++) {
+			const next = der[offset++];
+			if (next === undefined) throw new Error("Invalid ECDSA signature: bad length");
+			len = (len << 8) | next;
+		}
+		return len;
+	};
+
+	if (der[offset++] !== 0x30) throw new Error("Invalid ECDSA signature: missing sequence");
+	const seqLen = readLen();
+	if (seqLen > der.length - offset) throw new Error("Invalid ECDSA signature: sequence length");
+
+	if (der[offset++] !== 0x02) throw new Error("Invalid ECDSA signature: missing r integer");
+	const rLen = readLen();
+	let r = der.slice(offset, offset + rLen);
+	offset += rLen;
+
+	if (der[offset++] !== 0x02) throw new Error("Invalid ECDSA signature: missing s integer");
+	const sLen = readLen();
+	let s = der.slice(offset, offset + sLen);
+
+	while (r.length > half && r[0] === 0) r = r.slice(1);
+	while (s.length > half && s[0] === 0) s = s.slice(1);
+	if (r.length > half || s.length > half) {
+		throw new Error("Invalid ECDSA signature: r/s length overflow");
+	}
 
 	const out = new Uint8Array(joseSize);
-	out.set(r, joseSize / 2 - r.length);
+	out.set(r, half - r.length);
 	out.set(s, joseSize - s.length);
 	return out;
 }
