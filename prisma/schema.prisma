@@ -13,15 +13,26 @@ datasource db {
   provider = "sqlite"
 }
 
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  roomsOwned   Room[]
+}
+
 model Room {
   id                String         @id @default(uuid())
   name              String
   slug              String         @unique
+  ownerUserId       String?
   ownerPasswordHash String
   joinPasswordHash  String?
   vapidPublicKey    String
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
+  ownerUser         User?          @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
   members           Member[]
   subscriptions     Subscription[]
   notifications     Notification[]

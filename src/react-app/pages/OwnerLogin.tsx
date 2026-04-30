@@ -39,7 +39,7 @@ export default function OwnerLogin() {
 				</div>
 				<div className="card border border-base-300 bg-base-100 shadow-2xl">
 					<div className="card-body p-8">
-						<form onSubmit={onSubmit} className="space-y-5">
+						<form onSubmit={onSubmit} className="flex flex-col gap-5">
 							<label className="form-control w-full">
 								<div className="label">
 									<span className="label-text font-medium">Room name</span>
@@ -57,7 +57,7 @@ export default function OwnerLogin() {
 									onChange={(e) => setOwnerPassword(e.target.value)}
 								/>
 							</label>
-							<button className="btn btn-primary h-12 w-full text-base" disabled={loading}>
+							<button className="btn btn-primary mt-2 h-12 w-full text-base" disabled={loading}>
 								{loading && <span className="loading loading-spinner loading-sm" />}
 								Enter dashboard
 							</button>

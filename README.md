@@ -88,3 +88,21 @@ npx wrangler tail
 - [Vite Documentation](https://vitejs.dev/guide/)
 - [React Documentation](https://reactjs.org/)
 - [Hono Documentation](https://hono.dev/)
+
+## Production Push/Auth Checklist
+
+Required Worker secrets:
+
+- `VAPID_PUBLIC_KEY` (base64url P-256 public key, uncompressed)
+- `VAPID_PRIVATE_JWK`
+- `VAPID_SUBJECT`
+- `ROOM_OWNER_JWT_SECRET`
+
+Common production errors and fixes:
+
+- `The provided applicationServerKey is not valid`
+  - Cause: `VAPID_PUBLIC_KEY` missing/invalid format.
+  - Fix: set a valid VAPID key pair and redeploy Worker.
+- Owner cannot open dashboard (`401`/`403`)
+  - Cause: invalid/expired owner token or mismatched `ROOM_OWNER_JWT_SECRET`.
+  - Fix: ensure one stable `ROOM_OWNER_JWT_SECRET` value across deploys and login again.

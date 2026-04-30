@@ -19,6 +19,19 @@ function base64UrlToBytes(value: string): Uint8Array {
 	return bytes;
 }
 
+export function isValidVapidPublicKey(value: string | undefined): boolean {
+	if (!value) return false;
+	const trimmed = value.trim();
+	if (!/^[A-Za-z0-9_-]+$/.test(trimmed)) return false;
+	try {
+		const bytes = base64UrlToBytes(trimmed);
+		// Web Push VAPID public key must be uncompressed P-256 EC point: 65 bytes, 0x04 prefix.
+		return bytes.length === 65 && bytes[0] === 0x04;
+	} catch {
+		return false;
+	}
+}
+
 export function toBase64Url(input: string): string {
 	return bytesToBase64Url(new TextEncoder().encode(input));
 }
@@ -80,5 +93,15 @@ export function slugify(value: string): string {
 }
 
 export function randomToken(size = 24): string {
-	return crypto.randomUUID().replaceAll("-", "").slice(0, size);
+	return crypto.randomUUID().split("-").join("").slice(0, size);
+}
+
+const HANDLE_REGEX = /^[a-z][a-z0-9_]{2,31}$/;
+
+export function normalizeHandle(value: string): string {
+	return value.trim().toLowerCase();
+}
+
+export function isValidHandle(value: string): boolean {
+	return HANDLE_REGEX.test(normalizeHandle(value));
 }

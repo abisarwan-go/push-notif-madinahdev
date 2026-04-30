@@ -7,6 +7,8 @@ import CreateRoom from "./pages/CreateRoom";
 import JoinRoom from "./pages/JoinRoom";
 import OwnerLogin from "./pages/OwnerLogin";
 import RoomDashboard from "./pages/RoomDashboard";
+import UserRegister from "./pages/UserRegister";
+import UserLogin from "./pages/UserLogin";
 
 type ThemeMode = "light" | "dim";
 
@@ -35,6 +37,12 @@ function AppShell({
 						</Link>
 						<Link to="/owner-login" className="btn btn-ghost btn-sm">
 							Owner
+						</Link>
+						<Link to="/register" className="btn btn-ghost btn-sm">
+							Register
+						</Link>
+						<Link to="/login" className="btn btn-ghost btn-sm">
+							Login
 						</Link>
 						<button className="btn btn-ghost btn-sm" onClick={onToggleTheme} type="button">
 							{theme === "light" ? "Dark" : "Light"}
@@ -73,6 +81,8 @@ export default function App() {
 					<Route path="/create" element={<CreateRoom />} />
 					<Route path="/join" element={<JoinRoom />} />
 					<Route path="/owner-login" element={<OwnerLogin />} />
+					<Route path="/register" element={<UserRegister />} />
+					<Route path="/login" element={<UserLogin />} />
 					<Route path="/dashboard/:roomName" element={<RoomDashboard />} />
 				</Routes>
 			</AppShell>

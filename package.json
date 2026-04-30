@@ -12,6 +12,7 @@
 		"publish": true
 	},
 	"dependencies": {
+		"@hono/zod-validator": "^0.7.6",
 		"@prisma/adapter-d1": "^7.8.0",
 		"@prisma/client": "^7.8.0",
 		"hono": "4.11.1",
@@ -19,7 +20,8 @@
 		"react": "19.2.1",
 		"react-dom": "19.2.1",
 		"react-router-dom": "^7.14.2",
-		"sonner": "^2.0.7"
+		"sonner": "^2.0.7",
+		"zod": "^4.4.1"
 	},
 	"devDependencies": {
 		"@cloudflare/vite-plugin": "1.15.3",

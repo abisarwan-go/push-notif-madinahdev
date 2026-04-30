@@ -1,84 +1,78 @@
-import type { PushSubscriptionInput, SendPayload } from "../types";
+import { z } from "zod";
+import { isValidHandle, normalizeHandle } from "./crypto";
 
-function isString(v: unknown): v is string {
-	return typeof v === "string" && v.trim().length > 0;
-}
+const trimmed = (max: number) => z.string().trim().min(1).max(max);
+const handleString = z
+	.string()
+	.trim()
+	.min(3)
+	.max(32)
+	.transform((value) => normalizeHandle(value))
+	.refine((value) => isValidHandle(value), {
+		message: "Must match ^[a-z][a-z0-9_]{2,31}$",
+	});
 
-export function sanitizePayload(payload: unknown): SendPayload | null {
-	if (!payload || typeof payload !== "object") return null;
-	const body = payload as Partial<SendPayload>;
-	if (!isString(body.title) || !isString(body.body)) return null;
-	if (body.url && typeof body.url !== "string") return null;
-	return {
-		title: body.title.trim(),
-		body: body.body.trim(),
-		url: body.url?.trim(),
-	};
-}
+export const roomSlugParamSchema = z.object({
+	roomSlug: trimmed(120),
+});
 
-export function sanitizeSubscription(payload: unknown): PushSubscriptionInput | null {
-	if (!payload || typeof payload !== "object") return null;
-	const body = payload as Partial<PushSubscriptionInput>;
-	if (!isString(body.endpoint) || !isString(body.p256dh) || !isString(body.auth)) return null;
-	return {
-		endpoint: body.endpoint.trim(),
-		p256dh: body.p256dh.trim(),
-		auth: body.auth.trim(),
-		userAgent: typeof body.userAgent === "string" ? body.userAgent.slice(0, 300).trim() : undefined,
-		memberId: typeof body.memberId === "string" ? body.memberId.trim() : undefined,
-		displayName:
-			typeof body.displayName === "string" ? body.displayName.slice(0, 60).trim() : undefined,
-	};
-}
+export const authHeaderSchema = z.object({
+	authorization: z.string().trim().min(1),
+});
 
-export function readRoomCreateBody(payload: unknown) {
-	if (!payload || typeof payload !== "object") return null;
-	const body = payload as Record<string, unknown>;
-	const roomName = typeof body.roomName === "string" ? body.roomName.trim() : "";
-	const ownerPassword =
-		typeof body.ownerPassword === "string"
-			? body.ownerPassword.trim()
-			: typeof body.password === "string"
-				? body.password.trim()
-				: "";
-	const joinPassword = typeof body.joinPassword === "string" ? body.joinPassword.trim() : "";
-	const ownerDisplayName = typeof body.ownerDisplayName === "string" ? body.ownerDisplayName.trim() : "";
-	if (!roomName || !ownerPassword) return null;
-	return {
-		roomName: roomName.slice(0, 80),
-		ownerPassword: ownerPassword.slice(0, 120),
-		joinPassword: joinPassword.slice(0, 120) || undefined,
-		ownerDisplayName: ownerDisplayName.slice(0, 60) || "Owner",
-	};
-}
+export const roomCreateSchema = z
+	.object({
+		roomName: handleString,
+		ownerPassword: trimmed(120).optional(),
+		password: trimmed(120).optional(),
+		joinPassword: z.string().trim().max(120).optional(),
+		ownerDisplayName: z.string().trim().max(60).optional(),
+	})
+	.transform((value) => ({
+		roomName: value.roomName,
+		ownerPassword: value.ownerPassword ?? value.password ?? "",
+		joinPassword: value.joinPassword || undefined,
+		ownerDisplayName: value.ownerDisplayName || "Owner",
+	}))
+	.refine((value) => value.ownerPassword.length > 0, {
+		message: "ownerPassword is required",
+		path: ["ownerPassword"],
+	});
 
-export function readOwnerLoginBody(payload: unknown) {
-	if (!payload || typeof payload !== "object") return null;
-	const body = payload as Record<string, unknown>;
-	const roomName = typeof body.roomName === "string" ? body.roomName.trim() : "";
-	const ownerPassword = typeof body.ownerPassword === "string" ? body.ownerPassword.trim() : "";
-	if (!roomName || !ownerPassword) return null;
-	return {
-		roomName: roomName.slice(0, 80),
-		ownerPassword: ownerPassword.slice(0, 120),
-	};
-}
+export const ownerLoginSchema = z.object({
+	roomName: handleString,
+	ownerPassword: trimmed(120),
+});
 
-export function readRoomJoinBody(payload: unknown) {
-	if (!payload || typeof payload !== "object") return null;
-	const body = payload as Record<string, unknown>;
-	const roomName = typeof body.roomName === "string" ? body.roomName.trim() : "";
-	const joinPassword =
-		typeof body.joinPassword === "string"
-			? body.joinPassword.trim()
-			: typeof body.password === "string"
-				? body.password.trim()
-				: "";
-	const displayName = typeof body.displayName === "string" ? body.displayName.trim() : "";
-	if (!roomName || !displayName) return null;
-	return {
-		roomName: roomName.toLowerCase().slice(0, 80),
-		joinPassword: joinPassword.slice(0, 120) || undefined,
-		displayName: displayName.slice(0, 60),
-	};
-}
+export const roomJoinSchema = z
+	.object({
+		roomName: handleString,
+		displayName: trimmed(60),
+		joinPassword: z.string().trim().max(120).optional(),
+		password: z.string().trim().max(120).optional(),
+	})
+	.transform((value) => ({
+		roomName: value.roomName,
+		displayName: value.displayName,
+		joinPassword: value.joinPassword || value.password || undefined,
+	}));
+
+export const userAuthSchema = z.object({
+	username: handleString,
+	password: trimmed(120),
+});
+
+export const subscriptionSchema = z.object({
+	endpoint: trimmed(4000),
+	p256dh: trimmed(2000),
+	auth: trimmed(1000),
+	userAgent: z.string().trim().max(300).optional(),
+	memberId: z.string().trim().min(1).max(120).optional(),
+	displayName: z.string().trim().min(1).max(60).optional(),
+});
+
+export const sendPayloadSchema = z.object({
+	title: trimmed(200),
+	body: trimmed(4000),
+	url: z.string().trim().max(2000).optional(),
+});

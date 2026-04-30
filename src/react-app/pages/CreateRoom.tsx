@@ -46,7 +46,7 @@ export default function CreateRoom() {
 			</div>
 			<div className="card border border-base-300 bg-base-100 shadow-2xl">
 				<div className="card-body p-8">
-					<form onSubmit={handleSubmit} className="space-y-5">
+					<form onSubmit={handleSubmit} className="flex flex-col gap-5">
 						<label className="form-control w-full">
 							<div className="label">
 								<span className="label-text font-medium">Room name</span>
@@ -101,7 +101,7 @@ export default function CreateRoom() {
 						<div className="alert alert-info alert-soft text-sm">
 							<span>Owner password protects dashboard, join password protects members access.</span>
 						</div>
-						<button className="btn btn-primary h-12 w-full text-base" disabled={loading || !name.trim()}>
+						<button className="btn btn-primary mt-2 h-12 w-full text-base" disabled={loading || !name.trim()}>
 							{loading && <span className="loading loading-spinner loading-sm" />}
 							Provision Room
 						</button>

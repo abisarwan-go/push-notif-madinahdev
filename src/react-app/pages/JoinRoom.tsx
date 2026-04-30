@@ -2,6 +2,21 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { joinRoom, loadConfig, subscribeDevice } from "../services/api";
 
+function isValidVapidPublicKey(value: string): boolean {
+	const trimmed = value.trim();
+	if (!trimmed) return false;
+	if (!/^[A-Za-z0-9_-]+$/.test(trimmed)) return false;
+	try {
+		const padding = "=".repeat((4 - (trimmed.length % 4)) % 4);
+		const base64 = (trimmed + padding).replace(/-/g, "+").replace(/_/g, "/");
+		const rawData = atob(base64);
+		if (rawData.length !== 65) return false;
+		return rawData.charCodeAt(0) === 0x04;
+	} catch {
+		return false;
+	}
+}
+
 export default function JoinRoom() {
 	const [roomName, setRoomName] = useState(localStorage.getItem("roomSlug") ?? "");
 	const [displayName, setDisplayName] = useState(localStorage.getItem("displayName") ?? "");
@@ -25,7 +40,10 @@ export default function JoinRoom() {
 			await navigator.serviceWorker.ready;
 			let pushSub = await registration.pushManager.getSubscription();
 			if (!pushSub) {
-				const vapidKey = config.vapidPublicKey;
+				const vapidKey = config.vapidPublicKey?.trim() ?? "";
+				if (!isValidVapidPublicKey(vapidKey)) {
+					throw new Error("Push config invalid in production: VAPID public key is not valid");
+				}
 				const urlBase64ToUint8Array = (base64String: string) => {
 					const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
 					const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -69,7 +87,7 @@ export default function JoinRoom() {
 			</div>
 			<div className="card border border-base-300 bg-base-100 shadow-2xl">
 				<div className="card-body p-8">
-					<form onSubmit={handleSubmit} className="space-y-5">
+					<form onSubmit={handleSubmit} className="flex flex-col gap-5">
 						<label className="form-control w-full">
 							<div className="label">
 								<span className="label-text font-medium">Room name</span>
@@ -111,7 +129,7 @@ export default function JoinRoom() {
 						<div className="alert alert-info alert-soft text-sm">
 							<span>Use the exact room name shared by the owner.</span>
 						</div>
-						<button className="btn btn-primary h-12 w-full text-base" disabled={loading || !roomName.trim() || !displayName.trim()}>
+						<button className="btn btn-primary mt-2 h-12 w-full text-base" disabled={loading || !roomName.trim() || !displayName.trim()}>
 							{loading && <span className="loading loading-spinner loading-sm" />}
 							Join and subscribe
 						</button>

@@ -6,6 +6,7 @@ export type Bindings = {
 	VAPID_PRIVATE_JWK?: string;
 	VAPID_SUBJECT?: string;
 	ROOM_OWNER_JWT_SECRET?: string;
+	USER_JWT_SECRET?: string;
 };
 
 export type AppEnv = { Bindings: Bindings };

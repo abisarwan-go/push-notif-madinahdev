@@ -1,7 +1,16 @@
+import rpcClient from "./rpcClient";
+
 export type RoomCreateResponse = {
 	ok: boolean;
 	roomName: string;
 	roomSlug: string;
+};
+
+export type UserAuthResponse = {
+	ok: true;
+	user: { id: string; username: string };
+	token: string;
+	expiresInSec: number;
 };
 
 export type MemberJoinResponse = {
@@ -40,11 +49,7 @@ export async function createRoom(payload: {
 	joinPassword?: string;
 	ownerDisplayName?: string;
 }) {
-	const res = await fetch("/v1/rooms/create", {
-		method: "POST",
-		headers: { "content-type": "application/json" },
-		body: JSON.stringify(payload),
-	});
+	const res = await rpcClient.v1.rooms.create.$post({ json: payload });
 	return parseJson<RoomCreateResponse>(res);
 }
 
@@ -58,42 +63,38 @@ export async function createRoomFromForm(
 }
 
 export async function ownerLogin(roomName: string, ownerPassword: string) {
-	const res = await fetch("/v1/rooms/owner/login", {
-		method: "POST",
-		headers: { "content-type": "application/json" },
-		body: JSON.stringify({ roomName, ownerPassword }),
-	});
+	const res = await rpcClient.v1.rooms.owner.login.$post({ json: { roomName, ownerPassword } });
 	return parseJson<{ ok: true; token: string; expiresInSec: number; roomSlug: string; roomName: string }>(res);
 }
 
 export async function joinRoom(roomName: string, displayName: string, joinPassword?: string) {
-	const res = await fetch("/v1/rooms/join", {
-		method: "POST",
-		headers: { "content-type": "application/json" },
-		body: JSON.stringify({ roomName, displayName, joinPassword }),
-	});
+	const res = await rpcClient.v1.rooms.join.$post({ json: { roomName, displayName, joinPassword } });
 	return parseJson<MemberJoinResponse>(res);
 }
 
 export async function getRoomStats(roomName: string) {
 	const token = localStorage.getItem("ownerToken") ?? "";
 	if (!token) throw new Error("Missing owner token");
-	const res = await fetch(`/v1/rooms/${roomName}/dashboard`, {
-		headers: { Authorization: `Bearer ${token}` },
-	});
+	const res = await rpcClient.v1.rooms[":roomSlug"].dashboard.$get(
+		{ param: { roomSlug: roomName } },
+		{
+			headers: { Authorization: `Bearer ${token}` },
+		},
+	);
 	return parseJson<RoomStats>(res);
 }
 
 export async function loadConfig(roomSlug: string) {
-	const res = await fetch(`/v1/rooms/${roomSlug}/config`);
+	const res = await rpcClient.v1.rooms[":roomSlug"].config.$get({
+		param: { roomSlug },
+	});
 	return parseJson<RoomConfig>(res);
 }
 
 export async function subscribeDevice(roomSlug: string, payload: Record<string, unknown>) {
-	const res = await fetch(`/v1/rooms/${roomSlug}/subscribe`, {
-		method: "POST",
-		headers: { "content-type": "application/json" },
-		body: JSON.stringify(payload),
+	const res = await rpcClient.v1.rooms[":roomSlug"].subscribe.$post({
+		param: { roomSlug },
+		json: payload,
 	});
 	return parseJson<{ ok: true }>(res);
 }
@@ -101,13 +102,30 @@ export async function subscribeDevice(roomSlug: string, payload: Record<string, 
 export async function sendNotification(roomSlug: string, title: string, body: string) {
 	const token = localStorage.getItem("ownerToken") ?? "";
 	if (!token) throw new Error("Missing owner token in local storage");
-	const res = await fetch(`/v1/rooms/${roomSlug}/notifications`, {
-		method: "POST",
-		headers: {
-			"content-type": "application/json",
-			Authorization: `Bearer ${token}`,
+	const res = await rpcClient.v1.rooms[":roomSlug"].notifications.$post(
+		{
+			param: { roomSlug },
+			json: { title, body },
 		},
-		body: JSON.stringify({ title, body }),
-	});
+		{
+			headers: {
+				Authorization: `Bearer ${token}`,
+			},
+		},
+	);
 	return parseJson<{ ok: true; sent: number; failed: number }>(res);
+}
+
+export async function registerUser(username: string, password: string) {
+	const res = await rpcClient.v1.users.register.$post({
+		json: { username, password },
+	});
+	return parseJson<UserAuthResponse>(res);
+}
+
+export async function loginUser(username: string, password: string) {
+	const res = await rpcClient.v1.users.login.$post({
+		json: { username, password },
+	});
+	return parseJson<UserAuthResponse>(res);
 }
