@@ -22,8 +22,8 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(data.title, {
       body: data.body,
       data: { url: data.url },
-      icon: "/vite.svg",
-      badge: "/vite.svg",
+      icon: "/icon-192.png",
+      badge: "/favicon-32.png",
     }),
   );
 });
