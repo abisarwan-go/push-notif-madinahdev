@@ -51,8 +51,12 @@ model Project {
   tenantId       String
   name           String
   slug           String
+  roomSlug       String?          @unique
   allowedOrigin  String?
   vapidPublicKey String
+  isRoomMode     Boolean          @default(false)
+  roomPasswordHash String?
+  roomJoinCode   String?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -66,6 +70,8 @@ model Project {
 model Subscriber {
   id          String            @id @default(uuid())
   projectId   String
+  memberId    String?
+  displayName String?
   endpoint    String            @unique
   p256dh      String
   auth        String
