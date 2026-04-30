@@ -13,6 +13,12 @@ export default function CreateRoom() {
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
+		const userToken = localStorage.getItem("userToken");
+		if (!userToken) {
+			toast.error("Login required to create a room");
+			navigate("/login");
+			return;
+		}
 		if (!name.trim()) return toast.error("Room name is required");
 		if (!ownerPassword.trim()) return toast.error("Owner password is required");
 		setLoading(true);

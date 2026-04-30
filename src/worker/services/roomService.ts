@@ -4,6 +4,7 @@ import type { AppContext, PushSubscriptionInput } from "../types";
 
 export async function createRoom(
 	c: AppContext,
+	ownerUserId: string,
 	input: { roomName: string; ownerPassword: string; joinPassword?: string; ownerDisplayName: string },
 ) {
 	const prisma = await prismaClients.fetch(c.env.DB);
@@ -20,6 +21,7 @@ export async function createRoom(
 		data: {
 			name: input.roomName,
 			slug,
+			ownerUserId,
 			vapidPublicKey: c.env.VAPID_PUBLIC_KEY ?? "",
 			ownerPasswordHash,
 			joinPasswordHash,

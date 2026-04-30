@@ -49,7 +49,14 @@ export async function createRoom(payload: {
 	joinPassword?: string;
 	ownerDisplayName?: string;
 }) {
-	const res = await rpcClient.v1.rooms.create.$post({ json: payload });
+	const token = localStorage.getItem("userToken") ?? "";
+	if (!token) throw new Error("Authentication required: login first");
+	const res = await rpcClient.v1.rooms.create.$post(
+		{ json: payload },
+		{
+			headers: { Authorization: `Bearer ${token}` },
+		},
+	);
 	return parseJson<RoomCreateResponse>(res);
 }
 

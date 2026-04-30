@@ -1,5 +1,5 @@
 import prismaClients from "../lib/prismaClient";
-import { sha256Hex, signJwtHS256 } from "../lib/crypto";
+import { sha256Hex, signJwtHS256, verifyJwtHS256 } from "../lib/crypto";
 import type { AppContext } from "../types";
 
 const USER_JWT_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -57,4 +57,13 @@ export async function loginUser(c: AppContext, username: string, password: strin
 		USER_JWT_TTL_SECONDS,
 	);
 	return { user: { id: user.id, username: user.username }, token, expiresInSec: USER_JWT_TTL_SECONDS };
+}
+
+export async function verifyUserToken(c: AppContext, token: string) {
+	const payload = await verifyJwtHS256(token, resolveUserJwtSecret(c));
+	if (!payload) return null;
+	const userId = typeof payload.userId === "string" ? payload.userId : null;
+	const username = typeof payload.username === "string" ? payload.username : null;
+	if (!userId || !username) return null;
+	return { userId, username };
 }

@@ -17,6 +17,7 @@ export default function UserLogin() {
 			const result = await loginUser(username.trim(), password.trim());
 			localStorage.setItem("userToken", result.token);
 			localStorage.setItem("username", result.user.username);
+			window.dispatchEvent(new Event("auth-changed"));
 			toast.success("User authenticated");
 			navigate("/create");
 		} catch (error) {

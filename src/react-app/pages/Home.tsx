@@ -2,6 +2,8 @@ import { ArrowRight, ShieldCheck, Users2, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function Home() {
+	const isAuthenticated = Boolean(localStorage.getItem("userToken"));
+
 	return (
 		<div className="mx-auto flex min-h-[75vh] w-full max-w-5xl flex-col items-center justify-center gap-12 py-8">
 			<div className="space-y-5 text-center">
@@ -18,6 +20,23 @@ export default function Home() {
 					Create secure rooms to send real-time notifications to users, teams, and devices in
 					seconds.
 				</p>
+			</div>
+
+			<div className="flex flex-wrap items-center justify-center gap-3">
+				{isAuthenticated ? (
+					<Link to="/create" className="btn btn-primary">
+						Create Room <ArrowRight className="h-4 w-4" />
+					</Link>
+				) : (
+					<>
+						<Link to="/register" className="btn btn-primary">
+							Register
+						</Link>
+						<Link to="/login" className="btn btn-outline">
+							Login
+						</Link>
+					</>
+				)}
 			</div>
 
 			<div className="grid w-full max-w-3xl gap-4 md:grid-cols-2">

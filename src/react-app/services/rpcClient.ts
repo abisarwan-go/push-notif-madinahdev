@@ -7,7 +7,12 @@ export type RpcClient = {
 			login: { $post(args: { json: unknown }): Promise<Response> };
 		};
 		rooms: {
-			create: { $post(args: { json: unknown }): Promise<Response> };
+			create: {
+				$post(
+					args: { json: unknown },
+					options?: { headers?: Record<string, string> },
+				): Promise<Response>;
+			};
 			owner: { login: { $post(args: { json: unknown }): Promise<Response> } };
 			join: { $post(args: { json: unknown }): Promise<Response> };
 			":roomSlug": {

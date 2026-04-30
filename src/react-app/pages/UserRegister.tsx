@@ -6,17 +6,20 @@ import { registerUser } from "../services/api";
 export default function UserRegister() {
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
+	const [confirmPassword, setConfirmPassword] = useState("");
 	const [loading, setLoading] = useState(false);
 	const navigate = useNavigate();
 
 	const onSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!username.trim() || !password.trim()) return toast.error("Username and password are required");
+		if (password !== confirmPassword) return toast.error("Passwords do not match");
 		setLoading(true);
 		try {
 			const result = await registerUser(username.trim(), password.trim());
 			localStorage.setItem("userToken", result.token);
 			localStorage.setItem("username", result.user.username);
+			window.dispatchEvent(new Event("auth-changed"));
 			toast.success("Account created");
 			navigate("/login");
 		} catch (error) {
@@ -60,7 +63,21 @@ export default function UserRegister() {
 									onChange={(e) => setPassword(e.target.value)}
 								/>
 							</label>
-							<button className="btn btn-primary mt-2 h-12 w-full text-base" disabled={loading}>
+							<label className="form-control w-full">
+								<div className="label">
+									<span className="label-text font-medium">Confirm password</span>
+								</div>
+								<input
+									type="password"
+									className="input input-bordered w-full"
+									value={confirmPassword}
+									onChange={(e) => setConfirmPassword(e.target.value)}
+								/>
+							</label>
+							<button
+								className="btn btn-primary mt-2 h-12 w-full text-base"
+								disabled={loading || !username.trim() || !password.trim() || password !== confirmPassword}
+							>
 								{loading && <span className="loading loading-spinner loading-sm" />}
 								Register
 							</button>

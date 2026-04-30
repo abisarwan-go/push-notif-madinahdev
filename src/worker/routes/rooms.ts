@@ -21,6 +21,7 @@ import {
 	verifyOwnerToken,
 } from "../services/roomService";
 import { sendToProjectSubscribers } from "../services/pushService";
+import { verifyUserToken } from "../services/userService";
 import type { AppEnv } from "../types";
 
 const roomsApp = new Hono<AppEnv>();
@@ -45,11 +46,20 @@ const validateHeader = (schema: ZodSchema) =>
 		if (!result.success) return jsonError("Missing owner token", 401);
 	});
 
-roomsApp.post("/create", validateJson(roomCreateSchema, "Invalid room create payload"), async (c) => {
+roomsApp.post(
+	"/create",
+	validateHeader(authHeaderSchema),
+	validateJson(roomCreateSchema, "Invalid room create payload"),
+	async (c) => {
+	const { authorization } = c.req.valid("header") as z.infer<typeof authHeaderSchema>;
+	if (!authorization.startsWith("Bearer ")) return jsonError("Missing user token", 401);
+	const user = await verifyUserToken(c, authorization.slice("Bearer ".length));
+	if (!user) return jsonError("Invalid user token", 401);
 	const body = c.req.valid("json") as z.infer<typeof roomCreateSchema>;
-	const room = await createRoom(c, body);
+	const room = await createRoom(c, user.userId, body);
 	return c.json({ ok: true, ...room });
-});
+	},
+);
 
 roomsApp.post("/owner/login", validateJson(ownerLoginSchema, "Invalid owner login payload"), async (c) => {
 	const body = c.req.valid("json") as z.infer<typeof ownerLoginSchema>;
