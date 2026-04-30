@@ -39,6 +39,37 @@ export async function signHmacSha256(input: string, secret: string): Promise<str
 	return bytesToBase64Url(new Uint8Array(signature));
 }
 
+export async function signJwtHS256(
+	payload: Record<string, unknown>,
+	secret: string,
+	expiresInSeconds: number,
+): Promise<string> {
+	const header = toBase64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+	const now = Math.floor(Date.now() / 1000);
+	const body = toBase64Url(
+		JSON.stringify({
+			...payload,
+			iat: now,
+			exp: now + expiresInSeconds,
+		}),
+	);
+	const signature = await signHmacSha256(`${header}.${body}`, secret);
+	return `${header}.${body}.${signature}`;
+}
+
+export async function verifyJwtHS256(
+	token: string,
+	secret: string,
+): Promise<Record<string, unknown> | null> {
+	const [header, body, signature] = token.split(".");
+	if (!header || !body || !signature) return null;
+	const expected = await signHmacSha256(`${header}.${body}`, secret);
+	if (expected !== signature) return null;
+	const parsed = JSON.parse(fromBase64Url(body)) as { exp?: number } & Record<string, unknown>;
+	if (!parsed.exp || parsed.exp <= Math.floor(Date.now() / 1000)) return null;
+	return parsed;
+}
+
 export function slugify(value: string): string {
 	return value
 		.toLowerCase()

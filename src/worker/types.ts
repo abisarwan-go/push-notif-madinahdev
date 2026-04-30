@@ -5,7 +5,7 @@ export type Bindings = {
 	VAPID_PUBLIC_KEY?: string;
 	VAPID_PRIVATE_JWK?: string;
 	VAPID_SUBJECT?: string;
-	ROOM_INVITE_SECRET?: string;
+	ROOM_OWNER_JWT_SECRET?: string;
 };
 
 export type AppEnv = { Bindings: Bindings };

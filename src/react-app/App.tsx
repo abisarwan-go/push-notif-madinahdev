@@ -5,6 +5,7 @@ import "./App.css";
 import Home from "./pages/Home";
 import CreateRoom from "./pages/CreateRoom";
 import JoinRoom from "./pages/JoinRoom";
+import OwnerLogin from "./pages/OwnerLogin";
 import RoomDashboard from "./pages/RoomDashboard";
 
 type ThemeMode = "light" | "dim";
@@ -31,6 +32,9 @@ function AppShell({
 						</Link>
 						<Link to="/join" className="btn btn-ghost btn-sm">
 							Join
+						</Link>
+						<Link to="/owner-login" className="btn btn-ghost btn-sm">
+							Owner
 						</Link>
 						<button className="btn btn-ghost btn-sm" onClick={onToggleTheme} type="button">
 							{theme === "light" ? "Dark" : "Light"}
@@ -68,6 +72,7 @@ export default function App() {
 					<Route path="/" element={<Home />} />
 					<Route path="/create" element={<CreateRoom />} />
 					<Route path="/join" element={<JoinRoom />} />
+					<Route path="/owner-login" element={<OwnerLogin />} />
 					<Route path="/dashboard/:roomName" element={<RoomDashboard />} />
 				</Routes>
 			</AppShell>

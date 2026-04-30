@@ -1,26 +1,21 @@
 export type RoomCreateResponse = {
 	ok: boolean;
-	roomId: string;
 	roomName: string;
 	roomSlug: string;
-	roomJoinCode: string;
-	memberId: string;
-	dashboardToken: string;
-	apiKey: string;
 };
 
-export type RoomJoinResponse = {
+export type MemberJoinResponse = {
 	ok: boolean;
 	memberId: string;
 	roomName: string;
 	roomSlug: string;
-	projectId: string;
+	roomId: string;
 	displayName: string;
 };
 
-export type PublicProjectConfig = {
-	id: string;
-	name: string;
+export type RoomConfig = {
+	roomSlug: string;
+	roomName: string;
 	vapidPublicKey: string;
 };
 
@@ -29,7 +24,8 @@ type RoomStats = {
 	roomName: string;
 	roomSlug: string;
 	membersCount: number;
-	activeSubscribers: number;
+	activeSubscriptions: number;
+	notifications: Array<{ id: string; title: string; status: string; createdAt: string }>;
 };
 
 async function parseJson<T>(res: Response): Promise<T> {
@@ -40,9 +36,9 @@ async function parseJson<T>(res: Response): Promise<T> {
 
 export async function createRoom(payload: {
 	roomName: string;
-	password: string;
-	ownerName: string;
-	ownerEmail?: string;
+	ownerPassword: string;
+	joinPassword?: string;
+	ownerDisplayName?: string;
 }) {
 	const res = await fetch("/v1/rooms/create", {
 		method: "POST",
@@ -52,58 +48,49 @@ export async function createRoom(payload: {
 	return parseJson<RoomCreateResponse>(res);
 }
 
-export async function createRoomFromForm(roomName: string, password?: string, ownerName = "Owner") {
-	return createRoom({ roomName, password: password ?? "", ownerName });
+export async function createRoomFromForm(
+	roomName: string,
+	ownerPassword: string,
+	joinPassword?: string,
+	ownerDisplayName = "Owner",
+) {
+	return createRoom({ roomName, ownerPassword, joinPassword, ownerDisplayName });
 }
 
-export async function joinByName(roomName: string, payload: { password: string; displayName: string }) {
-	const res = await fetch("/v1/rooms/join-by-name", {
+export async function ownerLogin(roomName: string, ownerPassword: string) {
+	const res = await fetch("/v1/rooms/owner/login", {
 		method: "POST",
 		headers: { "content-type": "application/json" },
-		body: JSON.stringify({ roomName, ...payload }),
+		body: JSON.stringify({ roomName, ownerPassword }),
 	});
-	return parseJson<RoomJoinResponse>(res);
+	return parseJson<{ ok: true; token: string; expiresInSec: number; roomSlug: string; roomName: string }>(res);
 }
 
-export async function joinRoomFromForm(roomName: string, displayName: string, password?: string) {
-	return joinByName(roomName, { displayName, password: password ?? "" });
-}
-
-export async function createInvite(roomName: string, ttlMinutes = 5) {
-	const dashboardToken = localStorage.getItem("dashboardToken") ?? "";
-	if (!dashboardToken) throw new Error("Missing dashboard token");
-	const res = await fetch("/v1/rooms/invite", {
-		method: "POST",
-		headers: {
-			"content-type": "application/json",
-			"x-dashboard-token": dashboardToken,
-		},
-		body: JSON.stringify({ roomName, ttlMinutes }),
-	});
-	return parseJson<{ ok: true; token: string; expiresAt: string; roomSlug: string }>(res);
-}
-
-export async function joinByToken(token: string, displayName: string) {
-	const res = await fetch("/v1/rooms/join-by-token", {
+export async function joinRoom(roomName: string, displayName: string, joinPassword?: string) {
+	const res = await fetch("/v1/rooms/join", {
 		method: "POST",
 		headers: { "content-type": "application/json" },
-		body: JSON.stringify({ token, displayName }),
+		body: JSON.stringify({ roomName, displayName, joinPassword }),
 	});
-	return parseJson<RoomJoinResponse>(res);
+	return parseJson<MemberJoinResponse>(res);
 }
 
 export async function getRoomStats(roomName: string) {
-	const res = await fetch(`/v1/rooms/${roomName}/stats`);
+	const token = localStorage.getItem("ownerToken") ?? "";
+	if (!token) throw new Error("Missing owner token");
+	const res = await fetch(`/v1/rooms/${roomName}/dashboard`, {
+		headers: { Authorization: `Bearer ${token}` },
+	});
 	return parseJson<RoomStats>(res);
 }
 
-export async function loadConfig(projectId: string) {
-	const res = await fetch(`/v1/public/${projectId}/config`);
-	return parseJson<PublicProjectConfig>(res);
+export async function loadConfig(roomSlug: string) {
+	const res = await fetch(`/v1/rooms/${roomSlug}/config`);
+	return parseJson<RoomConfig>(res);
 }
 
-export async function subscribeDevice(projectId: string, payload: Record<string, unknown>) {
-	const res = await fetch(`/v1/rooms/${projectId}/subscribe`, {
+export async function subscribeDevice(roomSlug: string, payload: Record<string, unknown>) {
+	const res = await fetch(`/v1/rooms/${roomSlug}/subscribe`, {
 		method: "POST",
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify(payload),
@@ -111,20 +98,16 @@ export async function subscribeDevice(projectId: string, payload: Record<string,
 	return parseJson<{ ok: true }>(res);
 }
 
-export async function sendByDashboard(projectId: string, dashboardToken: string, payload: { title: string; body: string }) {
-	const res = await fetch(`/v1/dashboard/projects/${projectId}/notifications`, {
+export async function sendNotification(roomSlug: string, title: string, body: string) {
+	const token = localStorage.getItem("ownerToken") ?? "";
+	if (!token) throw new Error("Missing owner token in local storage");
+	const res = await fetch(`/v1/rooms/${roomSlug}/notifications`, {
 		method: "POST",
 		headers: {
 			"content-type": "application/json",
-			"x-dashboard-token": dashboardToken,
+			Authorization: `Bearer ${token}`,
 		},
-		body: JSON.stringify(payload),
+		body: JSON.stringify({ title, body }),
 	});
 	return parseJson<{ ok: true; sent: number; failed: number }>(res);
-}
-
-export async function sendNotification(projectId: string, title: string, body: string) {
-	const dashboardToken = localStorage.getItem("dashboardToken") ?? "";
-	if (!dashboardToken) throw new Error("Missing dashboard token in local storage");
-	return sendByDashboard(projectId, dashboardToken, { title, body });
 }

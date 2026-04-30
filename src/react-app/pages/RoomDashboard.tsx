@@ -2,14 +2,15 @@ import { Activity, BellRing, History, Send, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { createInvite, getRoomStats, sendNotification } from "../services/api";
+import { getRoomStats, sendNotification } from "../services/api";
 
 type RoomStatsModel = {
 	roomId: string;
 	roomName: string;
 	roomSlug: string;
 	membersCount: number;
-	activeSubscribers: number;
+	activeSubscriptions: number;
+	notifications: Array<{ id: string; title: string; status: string; createdAt: string }>;
 };
 
 export default function RoomDashboard() {
@@ -20,8 +21,6 @@ export default function RoomDashboard() {
 	const [title, setTitle] = useState("");
 	const [message, setMessage] = useState("");
 	const [isSending, setIsSending] = useState(false);
-	const [inviteLink, setInviteLink] = useState("");
-	const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
 
 	useEffect(() => {
 		let mounted = true;
@@ -76,24 +75,6 @@ export default function RoomDashboard() {
 		}
 	};
 
-	const handleGenerateInvite = async () => {
-		if (!roomSlug) return toast.error("Missing room slug");
-		setIsGeneratingInvite(true);
-		try {
-			const invited = await createInvite(roomSlug, 5);
-			const link = `${window.location.origin}/join?token=${encodeURIComponent(invited.token)}`;
-			setInviteLink(link);
-			await navigator.clipboard.writeText(link);
-			toast.success("Invite link copied (valid 5 minutes)");
-		} catch (error) {
-			toast.error("Failed to generate invite link", {
-				description: error instanceof Error ? error.message : "Unknown error",
-			});
-		} finally {
-			setIsGeneratingInvite(false);
-		}
-	};
-
 	return (
 		<div className="space-y-6">
 			<div className="flex flex-wrap items-end justify-between gap-4">
@@ -127,7 +108,7 @@ export default function RoomDashboard() {
 					</div>
 					<div className="stat-title">Active subscribers</div>
 					<div className="stat-value text-secondary">
-						{isLoadingStats ? <span className="loading loading-dots loading-md" /> : (stats?.activeSubscribers ?? 0)}
+						{isLoadingStats ? <span className="loading loading-dots loading-md" /> : (stats?.activeSubscriptions ?? 0)}
 					</div>
 				</div>
 				<div className="stat">
@@ -182,7 +163,7 @@ export default function RoomDashboard() {
 
 				<aside className="card border border-base-300 bg-base-100 shadow-xl lg:col-span-4">
 					<div className="card-body">
-						<h3 className="card-title text-base">Session details</h3>
+						<h3 className="card-title text-base">Owner session</h3>
 						<div className="space-y-2 text-sm">
 							<p>
 								Display name: <span className="font-medium">{localStorage.getItem("displayName") || "-"}</span>
@@ -191,25 +172,19 @@ export default function RoomDashboard() {
 								Member ID: <span className="font-mono text-xs">{localStorage.getItem("memberId") || "-"}</span>
 							</p>
 							<p>
-								Dashboard token:{" "}
-								<span className="font-mono text-xs">
-									{(localStorage.getItem("dashboardToken") || "-").slice(0, 10)}
-									...
-								</span>
+								Owner JWT: <span className="font-mono text-xs">{localStorage.getItem("ownerToken") ? "stored" : "missing"}</span>
 							</p>
 						</div>
-						<button className="btn btn-outline btn-sm mt-2" onClick={handleGenerateInvite} disabled={isGeneratingInvite}>
-							{isGeneratingInvite && <span className="loading loading-spinner loading-xs" />}
-							Generate invite link (5 min)
-						</button>
-						{inviteLink && (
-							<label className="form-control mt-2">
-								<div className="label">
-									<span className="label-text">Last invite link</span>
+						<div className="divider my-2" />
+						<h4 className="font-semibold text-sm">Latest notifications</h4>
+						<div className="max-h-56 space-y-2 overflow-auto text-xs">
+							{stats?.notifications?.map((n) => (
+								<div key={n.id} className="rounded border border-base-300 p-2">
+									<p className="font-medium">{n.title}</p>
+									<p className="text-base-content/60">{n.status}</p>
 								</div>
-								<input className="input input-bordered w-full font-mono text-xs" value={inviteLink} readOnly />
-							</label>
-						)}
+							))}
+						</div>
 						<div className="alert mt-2">
 							<Activity className="h-4 w-4" />
 							<span>Keep this tab open to monitor room activity.</span>

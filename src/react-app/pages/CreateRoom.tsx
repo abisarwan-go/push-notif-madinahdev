@@ -1,34 +1,33 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { createInvite, createRoomFromForm } from "../services/api";
+import { createRoomFromForm } from "../services/api";
 
 export default function CreateRoom() {
 	const [name, setName] = useState("");
-	const [password, setPassword] = useState("");
-	const [ownerName, setOwnerName] = useState(localStorage.getItem("displayName") ?? "");
+	const [ownerPassword, setOwnerPassword] = useState("");
+	const [joinPassword, setJoinPassword] = useState("");
+	const [ownerDisplayName, setOwnerDisplayName] = useState(localStorage.getItem("displayName") ?? "");
 	const [loading, setLoading] = useState(false);
-	const [inviteLink, setInviteLink] = useState("");
 	const navigate = useNavigate();
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!name.trim()) return toast.error("Room name is required");
+		if (!ownerPassword.trim()) return toast.error("Owner password is required");
 		setLoading(true);
 		try {
-			const result = await createRoomFromForm(name.trim(), password || undefined, ownerName || "Owner");
-			localStorage.setItem("projectId", result.roomId);
+			const result = await createRoomFromForm(
+				name.trim(),
+				ownerPassword.trim(),
+				joinPassword.trim() || undefined,
+				ownerDisplayName || "Owner",
+			);
 			localStorage.setItem("roomName", result.roomName);
 			localStorage.setItem("roomSlug", result.roomSlug);
-			localStorage.setItem("displayName", ownerName || "Owner");
-			localStorage.setItem("memberId", result.memberId);
-			localStorage.setItem("dashboardToken", result.dashboardToken);
-			localStorage.setItem("apiKey", result.apiKey);
-			const invited = await createInvite(result.roomSlug, 5);
-			const link = `${window.location.origin}/join?token=${encodeURIComponent(invited.token)}`;
-			setInviteLink(link);
+			localStorage.setItem("displayName", ownerDisplayName || "Owner");
 			toast.success("Room created successfully");
-			navigate(`/dashboard/${result.roomSlug}`);
+			navigate(`/owner-login?room=${encodeURIComponent(result.roomSlug)}`);
 		} catch (error) {
 			toast.error("Failed to create room", {
 				description: error instanceof Error ? error.message : "Unknown error",
@@ -62,41 +61,46 @@ export default function CreateRoom() {
 						</label>
 						<label className="form-control w-full">
 							<div className="label">
-								<span className="label-text font-medium">Your display name</span>
+								<span className="label-text font-medium">Owner display name</span>
 							</div>
 							<input
 								className="input input-bordered w-full bg-base-200/60 transition focus:bg-base-100"
 								placeholder="Admin"
-								value={ownerName}
-								onChange={(e) => setOwnerName(e.target.value)}
+								value={ownerDisplayName}
+								onChange={(e) => setOwnerDisplayName(e.target.value)}
 								disabled={loading}
 							/>
 						</label>
 						<label className="form-control w-full">
 							<div className="label">
-								<span className="label-text font-medium">Room password</span>
+								<span className="label-text font-medium">Owner password</span>
+							</div>
+							<input
+								type="password"
+								className="input input-bordered w-full bg-base-200/60 transition focus:bg-base-100"
+								placeholder="Required for dashboard access"
+								value={ownerPassword}
+								onChange={(e) => setOwnerPassword(e.target.value)}
+								disabled={loading}
+							/>
+						</label>
+						<label className="form-control w-full">
+							<div className="label">
+								<span className="label-text font-medium">Join password</span>
 								<span className="label-text-alt">Optional</span>
 							</div>
 							<input
 								type="password"
 								className="input input-bordered w-full bg-base-200/60 transition focus:bg-base-100"
-								placeholder="Leave empty for quick testing"
-								value={password}
-								onChange={(e) => setPassword(e.target.value)}
+								placeholder="Required for members if set"
+								value={joinPassword}
+								onChange={(e) => setJoinPassword(e.target.value)}
 								disabled={loading}
 							/>
 						</label>
 						<div className="alert alert-info alert-soft text-sm">
-							<span>Tip: choose a short room name like `ops-alerts`.</span>
+							<span>Owner password protects dashboard, join password protects members access.</span>
 						</div>
-						{inviteLink && (
-							<label className="form-control">
-								<div className="label">
-									<span className="label-text">Invite link (5 min)</span>
-								</div>
-								<input className="input input-bordered w-full font-mono text-xs" readOnly value={inviteLink} />
-							</label>
-						)}
 						<button className="btn btn-primary h-12 w-full text-base" disabled={loading || !name.trim()}>
 							{loading && <span className="loading loading-spinner loading-sm" />}
 							Provision Room

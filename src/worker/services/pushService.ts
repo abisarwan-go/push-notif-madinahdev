@@ -89,16 +89,15 @@ async function sendWebPush(subscription: PushSubscriptionInput, env: Bindings): 
 
 export async function sendToProjectSubscribers(
 	c: AppContext,
-	projectId: string,
+	roomId: string,
 	payload: SendPayload,
-	createdById?: string,
 ) {
 	const prisma = await prismaClients.fetch(c.env.DB);
-	const subscribers = await prisma.subscriber.findMany({ where: { projectId, status: "ACTIVE" } });
+	const subscriptions = await prisma.subscription.findMany({ where: { roomId, status: "ACTIVE" } });
 	const notification = await prisma.notification.create({
-		data: { projectId, createdById, title: payload.title, body: payload.body, url: payload.url, status: "QUEUED" },
+		data: { roomId, title: payload.title, body: payload.body, url: payload.url, status: "QUEUED" },
 	});
-	if (subscribers.length === 0) {
+	if (subscriptions.length === 0) {
 		await prisma.notification.update({
 			where: { id: notification.id },
 			data: { status: "FAILED", sentAt: new Date() },
@@ -108,7 +107,7 @@ export async function sendToProjectSubscribers(
 
 	let sent = 0;
 	let failed = 0;
-	for (const sub of subscribers) {
+	for (const sub of subscriptions) {
 		try {
 			const res = await sendWebPush(
 				{ endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth, userAgent: sub.userAgent ?? undefined },
@@ -117,7 +116,7 @@ export async function sendToProjectSubscribers(
 			if (res.ok) {
 				sent += 1;
 				await prisma.deliveryLog.create({
-					data: { notificationId: notification.id, subscriberId: sub.id, status: "SENT" },
+					data: { notificationId: notification.id, subscriptionId: sub.id, status: "SENT" },
 				});
 			} else {
 				failed += 1;
@@ -125,14 +124,14 @@ export async function sendToProjectSubscribers(
 				await prisma.deliveryLog.create({
 					data: {
 						notificationId: notification.id,
-						subscriberId: sub.id,
+						subscriptionId: sub.id,
 						status: "FAILED",
 						errorCode: String(res.status),
 						errorMessage: text.slice(0, 500),
 					},
 				});
 				if (res.status === 404 || res.status === 410) {
-					await prisma.subscriber.update({ where: { id: sub.id }, data: { status: "INVALID" } });
+					await prisma.subscription.update({ where: { id: sub.id }, data: { status: "INVALID" } });
 				}
 			}
 		} catch (error) {
@@ -140,7 +139,7 @@ export async function sendToProjectSubscribers(
 			await prisma.deliveryLog.create({
 				data: {
 					notificationId: notification.id,
-					subscriberId: sub.id,
+					subscriptionId: sub.id,
 					status: "FAILED",
 					errorMessage: error instanceof Error ? error.message.slice(0, 500) : "unknown",
 				},
