@@ -1,6 +1,15 @@
 import prismaClients from "../lib/prismaClient";
-import { randomToken, sha256Hex, signJwtHS256, slugify, verifyJwtHS256 } from "../lib/crypto";
+import { randomToken, sha256Hex, signJwtHS256, verifyJwtHS256 } from "../lib/crypto";
 import type { AppContext, PushSubscriptionInput } from "../types";
+
+/** URL / storage key for room: lowercase, allow hyphen + underscore (legacy slug migration). */
+export function normalizeRoomKey(raw: string): string {
+	try {
+		return decodeURIComponent(raw).trim().toLowerCase();
+	} catch {
+		return raw.trim().toLowerCase();
+	}
+}
 
 export async function createRoom(
 	c: AppContext,
@@ -10,17 +19,13 @@ export async function createRoom(
 	const prisma = await prismaClients.fetch(c.env.DB);
 	const ownerPasswordHash = await sha256Hex(randomToken(32));
 	const joinPasswordHash = input.joinPassword ? await sha256Hex(input.joinPassword) : null;
-	const slugBase = slugify(input.roomName) || "room";
-	let slug = slugBase;
-	let idx = 1;
-	while (await prisma.room.findFirst({ where: { slug } })) {
-		idx += 1;
-		slug = `${slugBase}-${idx}`;
+	const existing = await prisma.room.findUnique({ where: { name: input.roomName } });
+	if (existing) {
+		throw Object.assign(new Error("ROOM_NAME_TAKEN"), { code: "ROOM_NAME_TAKEN" });
 	}
 	const room = await prisma.room.create({
 		data: {
 			name: input.roomName,
-			slug,
 			ownerUserId,
 			vapidPublicKey: c.env.VAPID_PUBLIC_KEY ?? "",
 			ownerPasswordHash,
@@ -31,20 +36,19 @@ export async function createRoom(
 	return {
 		roomId: room.id,
 		roomName: room.name,
-		roomSlug: room.slug,
 	};
 }
 
 export async function ownerLogin(c: AppContext, roomName: string, ownerPassword: string) {
 	if (!c.env.ROOM_OWNER_JWT_SECRET) throw new Error("Missing ROOM_OWNER_JWT_SECRET");
 	const prisma = await prismaClients.fetch(c.env.DB);
-	const slug = slugify(roomName);
-	const room = await prisma.room.findFirst({ where: { slug } });
+	const key = normalizeRoomKey(roomName);
+	const room = await prisma.room.findUnique({ where: { name: key } });
 	if (!room) return null;
 	const hash = await sha256Hex(ownerPassword);
 	if (hash !== room.ownerPasswordHash) return false;
-	const token = await signJwtHS256({ roomId: room.id, roomSlug: room.slug }, c.env.ROOM_OWNER_JWT_SECRET, 7 * 24 * 60 * 60);
-	return { token, expiresInSec: 7 * 24 * 60 * 60, roomSlug: room.slug, roomName: room.name };
+	const token = await signJwtHS256({ roomId: room.id, roomName: room.name }, c.env.ROOM_OWNER_JWT_SECRET, 7 * 24 * 60 * 60);
+	return { token, expiresInSec: 7 * 24 * 60 * 60, roomName: room.name };
 }
 
 export async function joinByName(
@@ -54,8 +58,7 @@ export async function joinByName(
 	displayName: string,
 ) {
 	const prisma = await prismaClients.fetch(c.env.DB);
-	const slug = slugify(roomName);
-	const room = await prisma.room.findFirst({ where: { slug } });
+	const room = await prisma.room.findUnique({ where: { name: roomName } });
 	if (!room) return null;
 	if (room.joinPasswordHash) {
 		if (!joinPassword) return false;
@@ -67,7 +70,7 @@ export async function joinByName(
 		update: { lastSeenAt: new Date() },
 		create: { roomId: room.id, displayName },
 	});
-	return { memberId: member.id, roomId: room.id, roomSlug: room.slug, roomName: room.name, displayName };
+	return { memberId: member.id, roomId: room.id, roomName: room.name, displayName };
 }
 
 export async function verifyOwnerToken(c: AppContext, token: string) {
@@ -75,9 +78,10 @@ export async function verifyOwnerToken(c: AppContext, token: string) {
 	return verifyJwtHS256(token, c.env.ROOM_OWNER_JWT_SECRET);
 }
 
-export async function getRoomStats(c: AppContext, roomSlug: string) {
+export async function getRoomStats(c: AppContext, roomKey: string) {
 	const prisma = await prismaClients.fetch(c.env.DB);
-	const room = await prisma.room.findFirst({ where: { slug: slugify(roomSlug) } });
+	const name = normalizeRoomKey(roomKey);
+	const room = await prisma.room.findUnique({ where: { name } });
 	if (!room) return null;
 	const membersCount = await prisma.member.count({ where: { roomId: room.id } });
 	const activeSubscriptions = await prisma.subscription.count({ where: { roomId: room.id, status: "ACTIVE" } });
@@ -89,35 +93,58 @@ export async function getRoomStats(c: AppContext, roomSlug: string) {
 	return {
 		roomId: room.id,
 		roomName: room.name,
-		roomSlug: room.slug,
 		membersCount,
 		activeSubscriptions,
 		notifications,
 	};
 }
 
-export async function isRoomOwnedByUser(c: AppContext, roomSlug: string, userId: string): Promise<boolean> {
+export async function isRoomOwnedByUser(c: AppContext, roomKey: string, userId: string): Promise<boolean> {
 	const prisma = await prismaClients.fetch(c.env.DB);
-	const room = await prisma.room.findFirst({
-		where: { slug: slugify(roomSlug) },
+	const name = normalizeRoomKey(roomKey);
+	const room = await prisma.room.findUnique({
+		where: { name },
 		select: { ownerUserId: true },
 	});
 	return !!room && room.ownerUserId === userId;
 }
 
+/** Dashboard access: owner has full control; member is anyone with a Member row for this room (displayName = username). */
+export async function getDashboardViewerRole(
+	c: AppContext,
+	roomKey: string,
+	userId: string,
+	username: string,
+): Promise<"OWNER" | "MEMBER" | null> {
+	const prisma = await prismaClients.fetch(c.env.DB);
+	const name = normalizeRoomKey(roomKey);
+	const room = await prisma.room.findUnique({
+		where: { name },
+		select: { id: true, ownerUserId: true },
+	});
+	if (!room) return null;
+	if (room.ownerUserId === userId) return "OWNER";
+	const membership = await prisma.member.findFirst({
+		where: { roomId: room.id, displayName: username },
+		select: { id: true },
+	});
+	return membership ? "MEMBER" : null;
+}
+
 export async function upsertRoomSubscription(
 	c: AppContext,
-	roomSlug: string,
+	roomKey: string,
 	payload: PushSubscriptionInput,
 	origin?: string,
 ): Promise<{ ok: true } | { error: string }> {
 	const prisma = await prismaClients.fetch(c.env.DB);
-	const room = await prisma.room.findFirst({
-		where: { slug: slugify(roomSlug) },
+	const name = normalizeRoomKey(roomKey);
+	const room = await prisma.room.findUnique({
+		where: { name },
 		select: { id: true },
 	});
 	if (!room) return { error: "Room not found" };
-	void origin; // reserved for future origin policy.
+	void origin;
 	await prisma.subscription.upsert({
 		where: { endpoint: payload.endpoint },
 		update: {
@@ -139,4 +166,26 @@ export async function upsertRoomSubscription(
 		},
 	});
 	return { ok: true };
+}
+
+export async function listRoomsForUser(c: AppContext, userId: string, username: string) {
+	const prisma = await prismaClients.fetch(c.env.DB);
+	const owned = await prisma.room.findMany({
+		where: { ownerUserId: userId },
+		select: { id: true, name: true },
+		orderBy: { updatedAt: "desc" },
+	});
+	const memberships = await prisma.member.findMany({
+		where: { displayName: username },
+		select: { room: { select: { id: true, name: true, ownerUserId: true } } },
+	});
+	const joinedMap = new Map<string, { id: string; name: string }>();
+	for (const m of memberships) {
+		const r = m.room;
+		if (r.ownerUserId !== userId) joinedMap.set(r.id, { id: r.id, name: r.name });
+	}
+	return {
+		owned,
+		joined: [...joinedMap.values()].sort((a, b) => a.name.localeCompare(b.name)),
+	};
 }

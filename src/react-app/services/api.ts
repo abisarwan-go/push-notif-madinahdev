@@ -3,7 +3,7 @@ import rpcClient from "./rpcClient";
 export type RoomCreateResponse = {
 	ok: boolean;
 	roomName: string;
-	roomSlug: string;
+	roomId: string;
 };
 
 export type UserAuthResponse = {
@@ -17,30 +17,45 @@ export type MemberJoinResponse = {
 	ok: boolean;
 	memberId: string;
 	roomName: string;
-	roomSlug: string;
 	roomId: string;
 	displayName: string;
 };
 
 export type RoomConfig = {
-	roomSlug: string;
 	roomName: string;
 	vapidPublicKey: string;
 };
 
+export type MyRoomsResponse = {
+	ok: true;
+	owned: Array<{ id: string; name: string }>;
+	joined: Array<{ id: string; name: string }>;
+};
+
 type RoomStats = {
+	ok?: boolean;
+	viewerRole: "OWNER" | "MEMBER";
 	roomId: string;
 	roomName: string;
-	roomSlug: string;
 	membersCount: number;
 	activeSubscriptions: number;
-	notifications: Array<{ id: string; title: string; status: string; createdAt: string }>;
+	notifications: Array<{ id: string; title: string; body?: string; status: string; createdAt: string }>;
 };
 
 async function parseJson<T>(res: Response): Promise<T> {
 	const data = (await res.json().catch(() => ({}))) as T & { error?: string };
 	if (!res.ok) throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`);
 	return data;
+}
+
+export async function fetchMyRooms(): Promise<MyRoomsResponse> {
+	const token = localStorage.getItem("userToken") ?? "";
+	if (!token) throw new Error("Authentication required: login first");
+	const res = await rpcClient.v1.rooms.mine.$get(
+		{},
+		{ headers: { Authorization: `Bearer ${token}` } },
+	);
+	return parseJson<MyRoomsResponse>(res);
 }
 
 export async function createRoom(payload: { roomName: string; joinPassword?: string }) {
@@ -59,16 +74,21 @@ export async function createRoomFromForm(roomName: string, joinPassword?: string
 	return createRoom({ roomName, joinPassword });
 }
 
-export async function joinRoom(roomName: string, displayName: string, joinPassword?: string) {
-	const res = await rpcClient.v1.rooms.join.$post({ json: { roomName, displayName, joinPassword } });
+export async function joinRoom(roomName: string, joinPassword?: string) {
+	const token = localStorage.getItem("userToken") ?? "";
+	if (!token) throw new Error("Authentication required: login first");
+	const res = await rpcClient.v1.rooms.join.$post(
+		{ json: { roomName, joinPassword } },
+		{ headers: { Authorization: `Bearer ${token}` } },
+	);
 	return parseJson<MemberJoinResponse>(res);
 }
 
 export async function getRoomStats(roomName: string) {
 	const token = localStorage.getItem("userToken") ?? "";
 	if (!token) throw new Error("Missing user token");
-	const res = await rpcClient.v1.rooms[":roomSlug"].dashboard.$get(
-		{ param: { roomSlug: roomName } },
+	const res = await rpcClient.v1.rooms[":roomName"].dashboard.$get(
+		{ param: { roomName } },
 		{
 			headers: { Authorization: `Bearer ${token}` },
 		},
@@ -76,27 +96,27 @@ export async function getRoomStats(roomName: string) {
 	return parseJson<RoomStats>(res);
 }
 
-export async function loadConfig(roomSlug: string) {
-	const res = await rpcClient.v1.rooms[":roomSlug"].config.$get({
-		param: { roomSlug },
+export async function loadConfig(roomName: string) {
+	const res = await rpcClient.v1.rooms[":roomName"].config.$get({
+		param: { roomName },
 	});
 	return parseJson<RoomConfig>(res);
 }
 
-export async function subscribeDevice(roomSlug: string, payload: Record<string, unknown>) {
-	const res = await rpcClient.v1.rooms[":roomSlug"].subscribe.$post({
-		param: { roomSlug },
+export async function subscribeDevice(roomName: string, payload: Record<string, unknown>) {
+	const res = await rpcClient.v1.rooms[":roomName"].subscribe.$post({
+		param: { roomName },
 		json: payload,
 	});
 	return parseJson<{ ok: true }>(res);
 }
 
-export async function sendNotification(roomSlug: string, title: string, body: string) {
+export async function sendNotification(roomName: string, title: string, body: string) {
 	const token = localStorage.getItem("userToken") ?? "";
 	if (!token) throw new Error("Missing user token in local storage");
-	const res = await rpcClient.v1.rooms[":roomSlug"].notifications.$post(
+	const res = await rpcClient.v1.rooms[":roomName"].notifications.$post(
 		{
-			param: { roomSlug },
+			param: { roomName },
 			json: { title, body },
 		},
 		{

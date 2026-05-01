@@ -12,6 +12,7 @@
 		"publish": true
 	},
 	"dependencies": {
+		"@block65/webcrypto-web-push": "^1.0.2",
 		"@hono/zod-validator": "^0.7.6",
 		"@prisma/adapter-d1": "^7.8.0",
 		"@prisma/client": "^7.8.0",

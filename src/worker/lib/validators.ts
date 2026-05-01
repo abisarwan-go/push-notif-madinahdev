@@ -12,8 +12,15 @@ const handleString = z
 		message: "Must match ^[a-z][a-z0-9_]{2,31}$",
 	});
 
-export const roomSlugParamSchema = z.object({
-	roomSlug: trimmed(120),
+/** Path segment for a room (stored `Room.name`, lowercase; allows `-` for legacy names). */
+export const roomNameParamSchema = z.object({
+	roomName: z
+		.string()
+		.trim()
+		.min(1)
+		.max(120)
+		.transform((v) => v.toLowerCase())
+		.refine((v) => /^[a-z0-9_-]+$/.test(v), { message: "Invalid room name in URL" }),
 });
 
 export const authHeaderSchema = z.object({
@@ -33,13 +40,11 @@ export const ownerLoginSchema = z.object({
 export const roomJoinSchema = z
 	.object({
 		roomName: handleString,
-		displayName: trimmed(60),
 		joinPassword: z.string().trim().max(120).optional(),
 		password: z.string().trim().max(120).optional(),
 	})
 	.transform((value) => ({
 		roomName: value.roomName,
-		displayName: value.displayName,
 		joinPassword: value.joinPassword || value.password || undefined,
 	}));
 

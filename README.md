@@ -91,10 +91,12 @@ npx wrangler tail
 
 ## Production Push/Auth Checklist
 
+Outbound Web Push from the Worker uses [`@block65/webcrypto-web-push`](https://github.com/block65/webcrypto-web-push) (Web Crypto + `fetch`, no `jws`), so local `pnpm run dev` stays compatible with the Cloudflare Vite plugin. VAPID private material must be a **JWK that includes the `d` field** (the library reads `d` as the secret scalar; same JSON you already store as `VAPID_PRIVATE_JWK`).
+
 Required Worker secrets:
 
 - `VAPID_PUBLIC_KEY` (base64url P-256 public key, uncompressed)
-- `VAPID_PRIVATE_JWK`
+- `VAPID_PRIVATE_JWK` (full ES256 private JWK JSON including `d`)
 - `VAPID_SUBJECT`
 - `ROOM_OWNER_JWT_SECRET`
 

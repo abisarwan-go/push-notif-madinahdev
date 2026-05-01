@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { joinRoom, loadConfig, subscribeDevice } from "../services/api";
 
@@ -17,125 +18,189 @@ function isValidVapidPublicKey(value: string): boolean {
 	}
 }
 
+/** Ensures we may call PushManager.subscribe (prompts once when permission is still "default"). */
+async function ensureNotificationPermissionForPush(): Promise<void> {
+	if (!("Notification" in window)) {
+		throw new Error("This browser does not support web notifications.");
+	}
+	let perm = Notification.permission;
+	if (perm === "denied") {
+		throw new Error(
+			"Notifications are blocked for this site. Use the lock/icon in the address bar or browser site settings to allow notifications, then try Join again.",
+		);
+	}
+	if (perm === "default") {
+		perm = await Notification.requestPermission();
+	}
+	if (perm !== "granted") {
+		throw new Error("Notifications were not allowed, so push alerts for this room were not enabled.");
+	}
+}
+
+/** Turns Push/SW errors into short copy; avoids showing Chrome's "Registration failed - permission denied". */
+function describePushSetupFailure(error: unknown): string {
+	const raw = error instanceof Error ? error.message : String(error);
+	if (/permission denied/i.test(raw)) {
+		return "The browser refused push until notifications are allowed for this site.";
+	}
+	if (/notallowederror/i.test(raw)) {
+		return "Notifications or push were blocked by the browser.";
+	}
+	return raw;
+}
+
+async function subscribePushForRoom(roomName: string, memberId: string, displayName: string): Promise<void> {
+	await ensureNotificationPermissionForPush();
+	const config = await loadConfig(roomName);
+	if (!("serviceWorker" in navigator)) throw new Error("Service Worker not supported in this browser");
+	const registration = await navigator.serviceWorker.register("/sw.js");
+	await navigator.serviceWorker.ready;
+	let pushSub = await registration.pushManager.getSubscription();
+	if (!pushSub) {
+		const vapidKey = config.vapidPublicKey?.trim() ?? "";
+		if (!isValidVapidPublicKey(vapidKey)) {
+			throw new Error("VAPID public key missing or invalid on server");
+		}
+		const urlBase64ToUint8Array = (base64String: string) => {
+			const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+			const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+			const rawData = atob(base64);
+			return Uint8Array.from([...rawData].map((ch) => ch.charCodeAt(0)));
+		};
+		pushSub = await registration.pushManager.subscribe({
+			userVisibleOnly: true,
+			applicationServerKey: urlBase64ToUint8Array(vapidKey),
+		});
+	}
+	const json = pushSub.toJSON() as {
+		endpoint?: string;
+		keys?: { p256dh?: string; auth?: string };
+	};
+	if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) throw new Error("Invalid subscription payload");
+	await subscribeDevice(roomName, {
+		endpoint: json.endpoint,
+		p256dh: json.keys.p256dh,
+		auth: json.keys.auth,
+		memberId,
+		displayName,
+		userAgent: navigator.userAgent,
+	});
+}
+
 export default function JoinRoom() {
-	const [roomName, setRoomName] = useState(localStorage.getItem("roomSlug") ?? "");
-	const [displayName, setDisplayName] = useState(localStorage.getItem("displayName") ?? "");
+	const [roomName, setRoomName] = useState(
+		localStorage.getItem("roomName") ?? localStorage.getItem("roomSlug") ?? "",
+	);
 	const [joinPassword, setJoinPassword] = useState("");
 	const [loading, setLoading] = useState(false);
+	const [hasUserToken, setHasUserToken] = useState(() => Boolean(localStorage.getItem("userToken")));
+	const navigate = useNavigate();
+
+	useEffect(() => {
+		const sync = () => setHasUserToken(Boolean(localStorage.getItem("userToken")));
+		window.addEventListener("auth-changed", sync);
+		return () => window.removeEventListener("auth-changed", sync);
+	}, []);
+
+	useEffect(() => {
+		if (!hasUserToken) {
+			toast.info("Sign in required", { description: "Joining a room uses your account username as member name." });
+			navigate("/login?next=/join", { replace: true });
+		}
+	}, [hasUserToken, navigate]);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
+		if (!localStorage.getItem("userToken")) {
+			navigate("/login?next=/join");
+			return;
+		}
 		if (!roomName.trim()) return toast.error("Room name is required");
-		if (!displayName.trim()) return toast.error("Display name is required");
 		setLoading(true);
+		let joined: Awaited<ReturnType<typeof joinRoom>>;
 		try {
-			const joined = await joinRoom(roomName.trim(), displayName.trim(), joinPassword.trim() || undefined);
+			joined = await joinRoom(roomName.trim(), joinPassword.trim() || undefined);
 			localStorage.setItem("roomName", joined.roomName);
-			localStorage.setItem("roomSlug", joined.roomSlug);
+			localStorage.removeItem("roomSlug");
 			localStorage.setItem("displayName", joined.displayName);
 			localStorage.setItem("memberId", joined.memberId);
-			const config = await loadConfig(joined.roomSlug);
-			if (!("serviceWorker" in navigator)) throw new Error("Service Worker not supported");
-			const registration = await navigator.serviceWorker.register("/sw.js");
-			await navigator.serviceWorker.ready;
-			let pushSub = await registration.pushManager.getSubscription();
-			if (!pushSub) {
-				const vapidKey = config.vapidPublicKey?.trim() ?? "";
-				if (!isValidVapidPublicKey(vapidKey)) {
-					throw new Error("Push config invalid in production: VAPID public key is not valid");
-				}
-				const urlBase64ToUint8Array = (base64String: string) => {
-					const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-					const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-					const rawData = atob(base64);
-					return Uint8Array.from([...rawData].map((ch) => ch.charCodeAt(0)));
-				};
-				pushSub = await registration.pushManager.subscribe({
-					userVisibleOnly: true,
-					applicationServerKey: urlBase64ToUint8Array(vapidKey),
-				});
-			}
-			const json = pushSub.toJSON() as {
-				endpoint?: string;
-				keys?: { p256dh?: string; auth?: string };
-			};
-			if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) throw new Error("Invalid subscription payload");
-			await subscribeDevice(joined.roomSlug, {
-				endpoint: json.endpoint,
-				p256dh: json.keys.p256dh,
-				auth: json.keys.auth,
-				memberId: joined.memberId,
-				displayName: joined.displayName,
-				userAgent: navigator.userAgent,
-			});
-			toast.success("Joined and subscribed successfully");
 		} catch (error) {
 			toast.error("Failed to join room", {
 				description: error instanceof Error ? error.message : "Unknown error",
 			});
+			setLoading(false);
+			return;
+		}
+
+		try {
+			await subscribePushForRoom(joined.roomName, joined.memberId, joined.displayName);
+			toast.success("Joined and subscribed", { description: "You will receive push notifications for this room." });
+		} catch (error) {
+			const msg = describePushSetupFailure(error);
+			toast.warning("Joined the room — push not enabled yet", {
+				description: `${msg} You can still use the room dashboard; use Join from the menu again after allowing notifications if you want pushes.`,
+				duration: 9000,
+			});
 		} finally {
 			setLoading(false);
+			navigate(`/dashboard/${encodeURIComponent(joined.roomName)}`);
 		}
 	};
 
+	if (!hasUserToken) {
+		return (
+			<div className="mx-auto flex min-h-[50vh] w-full max-w-xl items-center justify-center px-4">
+				<span className="loading loading-lg loading-spinner text-primary" />
+			</div>
+		);
+	}
+
 	return (
-		<div className="mx-auto flex min-h-[72vh] w-full max-w-xl items-center">
-			<div className="w-full">
-			<div className="mb-8 text-center">
-				<h1 className="text-3xl font-bold">Join a room</h1>
-				<p className="mt-2 text-sm text-base-content/70">Join as member then auto-subscribe this device.</p>
-			</div>
-			<div className="card border border-base-300 bg-base-100 shadow-2xl">
-				<div className="card-body p-8">
-					<form onSubmit={handleSubmit} className="flex flex-col gap-5">
-						<label className="form-control w-full">
-							<div className="label">
-								<span className="label-text font-medium">Room name</span>
-							</div>
-							<input
-								className="input input-bordered w-full bg-base-200/60 transition focus:bg-base-100"
-								placeholder="marketing-fr"
-								value={roomName}
-								onChange={(e) => setRoomName(e.target.value)}
-								disabled={loading}
-							/>
-						</label>
-						<label className="form-control w-full">
-							<div className="label">
-								<span className="label-text font-medium">Display name</span>
-							</div>
-							<input
-								className="input input-bordered w-full bg-base-200/60 transition focus:bg-base-100"
-								placeholder="Mobile User"
-								value={displayName}
-								onChange={(e) => setDisplayName(e.target.value)}
-								disabled={loading}
-							/>
-						</label>
-					<label className="form-control w-full">
-						<div className="label">
-							<span className="label-text font-medium">Join password</span>
-							<span className="label-text-alt">If protected</span>
-						</div>
-						<input
-							type="password"
-							className="input input-bordered w-full bg-base-200/60 transition focus:bg-base-100"
-							placeholder="Join password"
-							value={joinPassword}
-							onChange={(e) => setJoinPassword(e.target.value)}
-							disabled={loading}
-						/>
-					</label>
-						<div className="alert alert-info alert-soft text-sm">
-							<span>Use the exact room name shared by the owner.</span>
-						</div>
-						<button className="btn btn-primary mt-2 h-12 w-full text-base" disabled={loading || !roomName.trim() || !displayName.trim()}>
-							{loading && <span className="loading loading-spinner loading-sm" />}
-							Join and subscribe
-						</button>
-					</form>
+		<div className="mx-auto flex min-h-[72vh] w-full max-w-xl items-center px-4 sm:px-0">
+			<div className="w-full min-w-0">
+				<div className="mb-6 text-center sm:mb-8">
+					<h1 className="text-2xl font-bold sm:text-3xl">Join a room</h1>
+					<p className="mt-2 text-sm text-base-content/70">You join using your account username.</p>
 				</div>
-			</div>
+				<div className="card border border-base-300 bg-base-100 shadow-2xl">
+					<div className="card-body gap-4 p-4 sm:p-8">
+						<form onSubmit={handleSubmit} className="flex flex-col gap-4 sm:gap-5">
+							<label className="form-control w-full">
+								<div className="label">
+									<span className="label-text font-medium">Room name</span>
+								</div>
+								<input
+									className="input input-bordered w-full min-w-0 bg-base-200/60 transition focus:bg-base-100"
+									placeholder="marketing-fr"
+									value={roomName}
+									onChange={(e) => setRoomName(e.target.value)}
+									disabled={loading}
+								/>
+							</label>
+							<label className="form-control w-full">
+								<div className="label">
+									<span className="label-text font-medium">Join password</span>
+									<span className="label-text-alt">If protected</span>
+								</div>
+								<input
+									type="password"
+									className="input input-bordered w-full min-w-0 bg-base-200/60 transition focus:bg-base-100"
+									placeholder="Join password"
+									value={joinPassword}
+									onChange={(e) => setJoinPassword(e.target.value)}
+									disabled={loading}
+								/>
+							</label>
+							<div className="alert alert-info alert-soft text-sm">
+								<span>Only room name and optional join password are sent. Your member name is your account username.</span>
+							</div>
+							<button className="btn btn-primary mt-1 h-12 w-full text-base" disabled={loading || !roomName.trim()}>
+								{loading && <span className="loading loading-spinner loading-sm" />}
+								Join and subscribe
+							</button>
+						</form>
+					</div>
+				</div>
 			</div>
 		</div>
 	);

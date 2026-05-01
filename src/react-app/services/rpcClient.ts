@@ -7,25 +7,36 @@ export type RpcClient = {
 			login: { $post(args: { json: unknown }): Promise<Response> };
 		};
 		rooms: {
+			mine: {
+				$get(
+					args?: object,
+					options?: { headers?: Record<string, string> },
+				): Promise<Response>;
+			};
 			create: {
 				$post(
 					args: { json: unknown },
 					options?: { headers?: Record<string, string> },
 				): Promise<Response>;
 			};
-			join: { $post(args: { json: unknown }): Promise<Response> };
-			":roomSlug": {
-				config: { $get(args: { param: { roomSlug: string } }): Promise<Response> };
-				subscribe: { $post(args: { param: { roomSlug: string }; json: unknown }): Promise<Response> };
+			join: {
+				$post(
+					args: { json: unknown },
+					options: { headers: Record<string, string> },
+				): Promise<Response>;
+			};
+			":roomName": {
+				config: { $get(args: { param: { roomName: string } }): Promise<Response> };
+				subscribe: { $post(args: { param: { roomName: string }; json: unknown }): Promise<Response> };
 				dashboard: {
 					$get(
-						args: { param: { roomSlug: string } },
+						args: { param: { roomName: string } },
 						options?: { headers?: Record<string, string> },
 					): Promise<Response>;
 				};
 				notifications: {
 					$post(
-						args: { param: { roomSlug: string }; json: unknown },
+						args: { param: { roomName: string }; json: unknown },
 						options?: { headers?: Record<string, string> },
 					): Promise<Response>;
 				};

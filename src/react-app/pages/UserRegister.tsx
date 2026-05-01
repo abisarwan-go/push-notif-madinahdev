@@ -36,21 +36,21 @@ export default function UserRegister() {
 	};
 
 	return (
-		<div className="mx-auto flex min-h-[72vh] w-full max-w-xl items-center">
-			<div className="w-full">
-				<div className="mb-8 text-center">
-					<h1 className="text-3xl font-bold">Create account</h1>
+		<div className="mx-auto flex min-h-[72vh] w-full max-w-xl items-center px-4 sm:px-0">
+			<div className="w-full min-w-0">
+				<div className="mb-6 text-center sm:mb-8">
+					<h1 className="text-2xl font-bold sm:text-3xl">Create account</h1>
 					<p className="mt-2 text-sm text-base-content/70">Username format: lowercase, digits, underscore.</p>
 				</div>
 				<div className="card border border-base-300 bg-base-100 shadow-2xl">
-					<div className="card-body p-8">
-						<form onSubmit={onSubmit} className="flex flex-col gap-5">
+					<div className="card-body gap-4 p-4 sm:p-8 sm:gap-5">
+						<form onSubmit={onSubmit} className="flex flex-col gap-4 sm:gap-5">
 							<label className="form-control w-full">
 								<div className="label">
 									<span className="label-text font-medium">Username</span>
 								</div>
 								<input
-									className="input input-bordered w-full"
+									className="input input-bordered w-full min-w-0"
 									placeholder="madinah_dev"
 									value={username}
 									onChange={(e) => setUsername(e.target.value)}
@@ -62,7 +62,7 @@ export default function UserRegister() {
 								</div>
 								<input
 									type="password"
-									className="input input-bordered w-full"
+									className="input input-bordered w-full min-w-0"
 									value={password}
 									onChange={(e) => setPassword(e.target.value)}
 								/>
@@ -73,7 +73,7 @@ export default function UserRegister() {
 								</div>
 								<input
 									type="password"
-									className="input input-bordered w-full"
+									className="input input-bordered w-full min-w-0"
 									value={confirmPassword}
 									onChange={(e) => setConfirmPassword(e.target.value)}
 								/>

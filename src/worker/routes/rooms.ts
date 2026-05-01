@@ -1,22 +1,24 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z, type ZodSchema } from "zod";
-import { isValidVapidPublicKey, slugify } from "../lib/crypto";
+import { isValidVapidPublicKey } from "../lib/crypto";
 import { jsonError } from "../lib/http";
 import {
 	authHeaderSchema,
 	ownerLoginSchema,
 	roomCreateSchema,
 	roomJoinSchema,
-	roomSlugParamSchema,
+	roomNameParamSchema,
 	sendPayloadSchema,
 	subscriptionSchema,
 } from "../lib/validators";
 import {
 	createRoom,
+	getDashboardViewerRole,
 	getRoomStats,
 	isRoomOwnedByUser,
 	joinByName,
+	listRoomsForUser,
 	ownerLogin,
 	upsertRoomSubscription,
 } from "../services/roomService";
@@ -41,21 +43,37 @@ const validateHeader = (schema: ZodSchema) =>
 		if (!result.success) return jsonError("Missing Authorization header", 401);
 	});
 
+roomsApp.get("/mine", validateHeader(authHeaderSchema), async (c) => {
+	const { authorization } = c.req.valid("header") as z.infer<typeof authHeaderSchema>;
+	if (!authorization.startsWith("Bearer ")) return jsonError("Missing user token", 401);
+	const user = await verifyUserToken(c, authorization.slice("Bearer ".length));
+	if (!user) return jsonError("Invalid user token", 401);
+	const lists = await listRoomsForUser(c, user.userId, user.username);
+	return c.json({ ok: true, ...lists });
+});
+
 roomsApp.post(
 	"/create",
 	validateHeader(authHeaderSchema),
 	validateJson(roomCreateSchema, "Invalid room create payload"),
 	async (c) => {
-	const { authorization } = c.req.valid("header") as z.infer<typeof authHeaderSchema>;
-	if (!authorization.startsWith("Bearer ")) return jsonError("Missing user token", 401);
-	const user = await verifyUserToken(c, authorization.slice("Bearer ".length));
-	if (!user) return jsonError("Invalid user token", 401);
-	const body = c.req.valid("json") as z.infer<typeof roomCreateSchema>;
-	const room = await createRoom(c, user.userId, {
-		...body,
-		ownerDisplayName: user.username,
-	});
-	return c.json({ ok: true, ...room });
+		const { authorization } = c.req.valid("header") as z.infer<typeof authHeaderSchema>;
+		if (!authorization.startsWith("Bearer ")) return jsonError("Missing user token", 401);
+		const user = await verifyUserToken(c, authorization.slice("Bearer ".length));
+		if (!user) return jsonError("Invalid user token", 401);
+		const body = c.req.valid("json") as z.infer<typeof roomCreateSchema>;
+		try {
+			const room = await createRoom(c, user.userId, {
+				...body,
+				ownerDisplayName: user.username,
+			});
+			return c.json({ ok: true, ...room });
+		} catch (err) {
+			if (typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "ROOM_NAME_TAKEN") {
+				return jsonError("Room name already taken", 409);
+			}
+			throw err;
+		}
 	},
 );
 
@@ -67,69 +85,78 @@ roomsApp.post("/owner/login", validateJson(ownerLoginSchema, "Invalid owner logi
 	return c.json({ ok: true, ...logged });
 });
 
-roomsApp.post("/join", validateJson(roomJoinSchema, "Invalid join payload"), async (c) => {
-	const body = c.req.valid("json") as z.infer<typeof roomJoinSchema>;
-	const joined = await joinByName(c, body.roomName, body.joinPassword, body.displayName);
-	if (joined === null) return jsonError("Room not found", 404);
-	if (joined === false) return jsonError("Wrong join password", 401);
-	return c.json({ ok: true, ...joined });
-});
-
 roomsApp.post(
-	"/:roomSlug/subscribe",
-	validateParam(roomSlugParamSchema),
-	validateJson(subscriptionSchema, "Invalid subscription payload"),
+	"/join",
+	validateHeader(authHeaderSchema),
+	validateJson(roomJoinSchema, "Invalid join payload"),
 	async (c) => {
-		const roomSlug = (c.req.valid("param") as z.infer<typeof roomSlugParamSchema>).roomSlug;
-		const payload = c.req.valid("json") as z.infer<typeof subscriptionSchema>;
-	const result = await upsertRoomSubscription(c, roomSlug, payload, c.req.header("origin"));
-	if ("error" in result) return jsonError(result.error, 404);
-	return c.json({ ok: true });
+		const { authorization } = c.req.valid("header") as z.infer<typeof authHeaderSchema>;
+		if (!authorization.startsWith("Bearer ")) return jsonError("Missing user token", 401);
+		const user = await verifyUserToken(c, authorization.slice("Bearer ".length));
+		if (!user) return jsonError("Invalid user token", 401);
+		const body = c.req.valid("json") as z.infer<typeof roomJoinSchema>;
+		const joined = await joinByName(c, body.roomName, body.joinPassword, user.username);
+		if (joined === null) return jsonError("Room not found", 404);
+		if (joined === false) return jsonError("Wrong join password", 401);
+		return c.json({ ok: true, ...joined });
 	},
 );
 
-roomsApp.get("/:roomSlug/config", validateParam(roomSlugParamSchema), async (c) => {
-	const roomSlug = (c.req.valid("param") as z.infer<typeof roomSlugParamSchema>).roomSlug;
-	const stats = await getRoomStats(c, roomSlug);
+roomsApp.post(
+	"/:roomName/subscribe",
+	validateParam(roomNameParamSchema),
+	validateJson(subscriptionSchema, "Invalid subscription payload"),
+	async (c) => {
+		const roomName = (c.req.valid("param") as z.infer<typeof roomNameParamSchema>).roomName;
+		const payload = c.req.valid("json") as z.infer<typeof subscriptionSchema>;
+		const result = await upsertRoomSubscription(c, roomName, payload, c.req.header("origin"));
+		if ("error" in result) return jsonError(result.error, 404);
+		return c.json({ ok: true });
+	},
+);
+
+roomsApp.get("/:roomName/config", validateParam(roomNameParamSchema), async (c) => {
+	const roomName = (c.req.valid("param") as z.infer<typeof roomNameParamSchema>).roomName;
+	const stats = await getRoomStats(c, roomName);
 	if (!stats) return jsonError("Room not found", 404);
 	const vapidPublicKey = c.env.VAPID_PUBLIC_KEY?.trim();
 	if (!isValidVapidPublicKey(vapidPublicKey)) {
 		return jsonError("Push config invalid: VAPID_PUBLIC_KEY is missing or invalid", 500);
 	}
-	return c.json({ roomSlug: stats.roomSlug, roomName: stats.roomName, vapidPublicKey });
+	return c.json({ roomName: stats.roomName, vapidPublicKey });
 });
 
-roomsApp.get("/:roomSlug/dashboard", validateParam(roomSlugParamSchema), validateHeader(authHeaderSchema), async (c) => {
+roomsApp.get("/:roomName/dashboard", validateParam(roomNameParamSchema), validateHeader(authHeaderSchema), async (c) => {
 	const { authorization } = c.req.valid("header") as z.infer<typeof authHeaderSchema>;
 	if (!authorization.startsWith("Bearer ")) return jsonError("Missing user token", 401);
 	const user = await verifyUserToken(c, authorization.slice("Bearer ".length));
 	if (!user) return jsonError("Invalid user token", 401);
-	const roomSlug = slugify((c.req.valid("param") as z.infer<typeof roomSlugParamSchema>).roomSlug);
-	const owned = await isRoomOwnedByUser(c, roomSlug, user.userId);
-	if (!owned) return jsonError("Forbidden", 403);
-	const stats = await getRoomStats(c, roomSlug);
+	const roomName = (c.req.valid("param") as z.infer<typeof roomNameParamSchema>).roomName;
+	const viewerRole = await getDashboardViewerRole(c, roomName, user.userId, user.username);
+	if (!viewerRole) return jsonError("Forbidden", 403);
+	const stats = await getRoomStats(c, roomName);
 	if (!stats) return jsonError("Room not found", 404);
-	return c.json({ ok: true, ...stats });
+	return c.json({ ok: true, viewerRole, ...stats });
 });
 
 roomsApp.post(
-	"/:roomSlug/notifications",
-	validateParam(roomSlugParamSchema),
+	"/:roomName/notifications",
+	validateParam(roomNameParamSchema),
 	validateHeader(authHeaderSchema),
 	validateJson(sendPayloadSchema, "Invalid body"),
 	async (c) => {
 		const { authorization } = c.req.valid("header") as z.infer<typeof authHeaderSchema>;
 		if (!authorization.startsWith("Bearer ")) return jsonError("Missing user token", 401);
 		const user = await verifyUserToken(c, authorization.slice("Bearer ".length));
-	if (!user) return jsonError("Invalid user token", 401);
-		const roomSlug = slugify((c.req.valid("param") as z.infer<typeof roomSlugParamSchema>).roomSlug);
-	const owned = await isRoomOwnedByUser(c, roomSlug, user.userId);
-	if (!owned) return jsonError("Forbidden", 403);
-	const roomStats = await getRoomStats(c, roomSlug);
-	if (!roomStats) return jsonError("Room not found", 404);
+		if (!user) return jsonError("Invalid user token", 401);
+		const roomName = (c.req.valid("param") as z.infer<typeof roomNameParamSchema>).roomName;
+		const owned = await isRoomOwnedByUser(c, roomName, user.userId);
+		if (!owned) return jsonError("Forbidden", 403);
+		const roomStats = await getRoomStats(c, roomName);
+		if (!roomStats) return jsonError("Room not found", 404);
 		const body = c.req.valid("json") as z.infer<typeof sendPayloadSchema>;
-	const result = await sendToProjectSubscribers(c, roomStats.roomId, body);
-	return c.json({ ok: true, ...result });
+		const result = await sendToProjectSubscribers(c, roomStats.roomId, body);
+		return c.json({ ok: true, ...result });
 	},
 );
 

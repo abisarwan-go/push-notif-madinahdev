@@ -6,6 +6,7 @@ import "./App.css";
 import Home from "./pages/Home";
 import CreateRoom from "./pages/CreateRoom";
 import JoinRoom from "./pages/JoinRoom";
+import MyRooms from "./pages/MyRooms";
 import OwnerLogin from "./pages/OwnerLogin";
 import RoomDashboard from "./pages/RoomDashboard";
 import UserRegister from "./pages/UserRegister";
@@ -31,32 +32,39 @@ function AppShell({
 	return (
 		<div className="flex min-h-screen flex-col">
 			<header className="sticky top-0 z-50 border-b border-base-300 bg-base-100/90 backdrop-blur">
-				<div className="navbar mx-auto max-w-7xl px-4">
-					<Link to="/" className="btn btn-ghost text-xl normal-case">
+				<div className="navbar mx-auto max-w-7xl flex-wrap gap-y-2 px-3 py-2 sm:px-4">
+					<Link to="/" className="btn btn-ghost shrink-0 text-lg normal-case sm:text-xl">
 						RoomPush
 					</Link>
-					<nav className="ml-auto flex items-center gap-1 md:gap-2">
+					<nav className="flex flex-1 flex-wrap items-center justify-end gap-1 sm:ml-auto sm:flex-nowrap sm:gap-2">
 						{isAuthenticated ? (
-							<Link to="/create" className="btn btn-ghost btn-sm">
-								Create
-							</Link>
+							<>
+								<Link to="/rooms" className="btn btn-ghost btn-xs whitespace-nowrap sm:btn-sm">
+									My rooms
+								</Link>
+								<Link to="/create" className="btn btn-ghost btn-xs sm:btn-sm">
+									Create
+								</Link>
+							</>
 						) : null}
-						<Link to="/join" className="btn btn-ghost btn-sm">
+						<Link to={isAuthenticated ? "/join" : "/login?next=/join"} className="btn btn-ghost btn-xs sm:btn-sm">
 							Join
 						</Link>
 						{!isAuthenticated ? (
-							<Link to="/login" className="btn btn-primary btn-sm">
+							<Link to="/login" className="btn btn-primary btn-xs sm:btn-sm">
 								Login
 							</Link>
 						) : (
 							<>
-								<span className="badge badge-outline mr-1 hidden md:inline-flex">{username}</span>
-								<button className="btn btn-ghost btn-sm" onClick={onLogout} type="button">
+								<span className="badge badge-outline max-w-[8rem] truncate sm:mr-1 sm:max-w-none md:inline-flex">
+									{username}
+								</span>
+								<button className="btn btn-ghost btn-xs sm:btn-sm" onClick={onLogout} type="button">
 									Logout
 								</button>
 							</>
 						)}
-						<label className="swap swap-rotate btn btn-ghost btn-sm px-2">
+						<label className="swap swap-rotate btn btn-ghost btn-xs px-2 sm:btn-sm">
 							<input type="checkbox" checked={theme === "dim"} onChange={onToggleTheme} />
 							<Sun className="swap-off h-4 w-4" />
 							<Moon className="swap-on h-4 w-4" />
@@ -64,8 +72,8 @@ function AppShell({
 					</nav>
 				</div>
 			</header>
-			<main className="mx-auto flex w-full max-w-7xl flex-1 flex-col p-6">{children}</main>
-			<footer className="py-6 text-center text-sm text-base-content/60">
+			<main className="mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col p-4 sm:p-6">{children}</main>
+			<footer className="px-4 py-6 text-center text-sm text-base-content/60">
 				&copy; {new Date().getFullYear()} Room Push
 			</footer>
 		</div>
@@ -107,6 +115,7 @@ export default function App() {
 		localStorage.removeItem("userToken");
 		localStorage.removeItem("username");
 		localStorage.removeItem("ownerToken");
+		localStorage.removeItem("roomSlug");
 		window.dispatchEvent(new Event("auth-changed"));
 	};
 
@@ -123,13 +132,14 @@ export default function App() {
 					<Route path="/" element={<Home />} />
 					<Route path="/create" element={<CreateRoom />} />
 					<Route path="/join" element={<JoinRoom />} />
+					<Route path="/rooms" element={<MyRooms />} />
 					<Route path="/owner-login" element={<OwnerLogin />} />
 					<Route path="/register" element={<UserRegister />} />
 					<Route path="/login" element={<UserLogin />} />
 					<Route path="/dashboard/:roomName" element={<RoomDashboard />} />
 				</Routes>
 			</AppShell>
-			<Toaster theme={toasterTheme} position="top-right" richColors />
+			<Toaster theme={toasterTheme} position="top-center" richColors />
 		</BrowserRouter>
 	);
 }

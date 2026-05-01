@@ -36,22 +36,22 @@ export default function UserLogin() {
 	const registerHref = nextParam ? `/register?next=${encodeURIComponent(nextParam)}` : "/register";
 
 	return (
-		<div className="mx-auto flex min-h-[72vh] w-full max-w-xl items-center">
-			<div className="w-full">
-				<div className="mb-8 text-center">
-					<h1 className="text-3xl font-bold">Sign in</h1>
+		<div className="mx-auto flex min-h-[72vh] w-full max-w-xl items-center px-4 sm:px-0">
+			<div className="w-full min-w-0">
+				<div className="mb-6 text-center sm:mb-8">
+					<h1 className="text-2xl font-bold sm:text-3xl">Sign in</h1>
 					<p className="mt-2 text-sm text-base-content/70">Use your RoomPush account to create rooms and open dashboards.</p>
 				</div>
 				<div className="card border border-base-300 bg-base-100 shadow-2xl">
 					<div className="card-body gap-0 p-0 sm:p-2">
-						<div className="p-6 sm:p-8">
-							<form onSubmit={onSubmit} className="flex flex-col gap-5">
+						<div className="p-4 sm:p-8">
+							<form onSubmit={onSubmit} className="flex flex-col gap-4 sm:gap-5">
 								<label className="form-control w-full">
 									<div className="label">
 										<span className="label-text font-medium">Username</span>
 									</div>
 									<input
-										className="input input-bordered w-full bg-base-200/50 focus:bg-base-100"
+										className="input input-bordered w-full min-w-0 bg-base-200/50 focus:bg-base-100"
 										autoComplete="username"
 										value={username}
 										onChange={(e) => setUsername(e.target.value)}
@@ -63,7 +63,7 @@ export default function UserLogin() {
 									</div>
 									<input
 										type="password"
-										className="input input-bordered w-full bg-base-200/50 focus:bg-base-100"
+										className="input input-bordered w-full min-w-0 bg-base-200/50 focus:bg-base-100"
 										autoComplete="current-password"
 										value={password}
 										onChange={(e) => setPassword(e.target.value)}
@@ -76,10 +76,10 @@ export default function UserLogin() {
 							</form>
 						</div>
 
-						<div className="divider my-0 px-6 text-xs text-base-content/50 sm:px-8">or</div>
+						<div className="divider my-0 px-4 text-xs text-base-content/50 sm:px-8">or</div>
 
-						<div className="rounded-b-2xl bg-gradient-to-br from-primary/10 via-base-200/40 to-secondary/10 p-6 sm:p-8">
-							<div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
+						<div className="rounded-b-2xl bg-gradient-to-br from-primary/10 via-base-200/40 to-secondary/10 p-4 sm:p-8">
+							<div className="flex flex-col items-stretch gap-4 text-center sm:flex-row sm:items-center sm:text-left">
 								<div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-base-100 shadow-inner ring-1 ring-base-300">
 									<UserPlus className="h-7 w-7 text-primary" />
 								</div>
@@ -87,7 +87,7 @@ export default function UserLogin() {
 									<p className="font-semibold text-base-content">New to RoomPush?</p>
 									<p className="text-sm text-base-content/70">Create a free account in under a minute, then create your first room.</p>
 								</div>
-								<Link to={registerHref} className="btn btn-outline btn-primary shrink-0 gap-2 border-primary/40">
+								<Link to={registerHref} className="btn btn-outline btn-primary w-full shrink-0 gap-2 border-primary/40 sm:w-auto">
 									Create account
 								</Link>
 							</div>

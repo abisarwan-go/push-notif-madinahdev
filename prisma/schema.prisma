@@ -24,8 +24,7 @@ model User {
 
 model Room {
   id                String         @id @default(uuid())
-  name              String
-  slug              String         @unique
+  name              String         @unique
   ownerUserId       String?
   ownerPasswordHash String
   joinPasswordHash  String?

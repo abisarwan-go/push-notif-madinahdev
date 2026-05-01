@@ -22,7 +22,8 @@
 		{
 			"binding": "DB",
 			"database_name": "push-notif",
-			"database_id": "ac43e80c-75af-4881-ac19-18c50bd4f994"
+			"database_id": "ac43e80c-75af-4881-ac19-18c50bd4f994",
+			"migrations_dir": "migrations"
 		}
 	]
 	/**
