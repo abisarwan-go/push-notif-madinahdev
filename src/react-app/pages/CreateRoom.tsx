@@ -1,39 +1,46 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { createRoomFromForm } from "../services/api";
 
 export default function CreateRoom() {
 	const [name, setName] = useState("");
-	const [ownerPassword, setOwnerPassword] = useState("");
 	const [joinPassword, setJoinPassword] = useState("");
-	const [ownerDisplayName, setOwnerDisplayName] = useState(localStorage.getItem("displayName") ?? "");
 	const [loading, setLoading] = useState(false);
+	const [hasUserToken, setHasUserToken] = useState(() => Boolean(localStorage.getItem("userToken")));
 	const navigate = useNavigate();
+
+	useEffect(() => {
+		const sync = () => setHasUserToken(Boolean(localStorage.getItem("userToken")));
+		window.addEventListener("auth-changed", sync);
+		return () => window.removeEventListener("auth-changed", sync);
+	}, []);
+
+	useEffect(() => {
+		if (!hasUserToken) {
+			toast.info("Sign in required", { description: "Create room is only available for signed-in accounts." });
+			navigate("/login?next=/create", { replace: true });
+		}
+	}, [hasUserToken, navigate]);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		const userToken = localStorage.getItem("userToken");
 		if (!userToken) {
 			toast.error("Login required to create a room");
-			navigate("/login");
+			navigate("/login?next=/create");
 			return;
 		}
 		if (!name.trim()) return toast.error("Room name is required");
-		if (!ownerPassword.trim()) return toast.error("Owner password is required");
 		setLoading(true);
 		try {
-			const result = await createRoomFromForm(
-				name.trim(),
-				ownerPassword.trim(),
-				joinPassword.trim() || undefined,
-				ownerDisplayName || "Owner",
-			);
+			const result = await createRoomFromForm(name.trim(), joinPassword.trim() || undefined);
 			localStorage.setItem("roomName", result.roomName);
 			localStorage.setItem("roomSlug", result.roomSlug);
-			localStorage.setItem("displayName", ownerDisplayName || "Owner");
+			const accountName = localStorage.getItem("username") ?? "";
+			if (accountName) localStorage.setItem("displayName", accountName);
 			toast.success("Room created successfully");
-			navigate(`/owner-login?room=${encodeURIComponent(result.roomSlug)}`);
+			navigate(`/dashboard/${result.roomSlug}`);
 		} catch (error) {
 			toast.error("Failed to create room", {
 				description: error instanceof Error ? error.message : "Unknown error",
@@ -42,6 +49,14 @@ export default function CreateRoom() {
 			setLoading(false);
 		}
 	};
+
+	if (!hasUserToken) {
+		return (
+			<div className="mx-auto flex min-h-[50vh] w-full max-w-xl items-center justify-center">
+				<span className="loading loading-lg loading-spinner text-primary" />
+			</div>
+		);
+	}
 
 	return (
 		<div className="mx-auto flex min-h-[72vh] w-full max-w-xl items-center">
@@ -67,31 +82,6 @@ export default function CreateRoom() {
 						</label>
 						<label className="form-control w-full">
 							<div className="label">
-								<span className="label-text font-medium">Owner display name</span>
-							</div>
-							<input
-								className="input input-bordered w-full bg-base-200/60 transition focus:bg-base-100"
-								placeholder="Admin"
-								value={ownerDisplayName}
-								onChange={(e) => setOwnerDisplayName(e.target.value)}
-								disabled={loading}
-							/>
-						</label>
-						<label className="form-control w-full">
-							<div className="label">
-								<span className="label-text font-medium">Owner password</span>
-							</div>
-							<input
-								type="password"
-								className="input input-bordered w-full bg-base-200/60 transition focus:bg-base-100"
-								placeholder="Required for dashboard access"
-								value={ownerPassword}
-								onChange={(e) => setOwnerPassword(e.target.value)}
-								disabled={loading}
-							/>
-						</label>
-						<label className="form-control w-full">
-							<div className="label">
 								<span className="label-text font-medium">Join password</span>
 								<span className="label-text-alt">Optional</span>
 							</div>
@@ -105,7 +95,11 @@ export default function CreateRoom() {
 							/>
 						</label>
 						<div className="alert alert-info alert-soft text-sm">
-							<span>Owner password protects dashboard, join password protects members access.</span>
+							<span>
+								Your member display name in this room matches your account (
+								<span className="font-mono font-medium">{localStorage.getItem("username") ?? "…"}</span>
+								). Optional join password limits who can join as a member.
+							</span>
 						</div>
 						<button className="btn btn-primary mt-2 h-12 w-full text-base" disabled={loading || !name.trim()}>
 							{loading && <span className="loading loading-spinner loading-sm" />}

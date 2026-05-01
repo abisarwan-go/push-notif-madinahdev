@@ -1,65 +1,59 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ownerLogin } from "../services/api";
+
+/** Same rules as worker `slugify` so dashboard URL matches stored room slug. */
+function slugify(value: string): string {
+	return value
+		.toLowerCase()
+		.trim()
+		.replace(/[^a-z0-9\s-]/g, "")
+		.replace(/\s+/g, "-")
+		.replace(/-+/g, "-");
+}
 
 export default function OwnerLogin() {
 	const [searchParams] = useSearchParams();
 	const [roomName, setRoomName] = useState(searchParams.get("room") ?? localStorage.getItem("roomSlug") ?? "");
-	const [ownerPassword, setOwnerPassword] = useState("");
-	const [loading, setLoading] = useState(false);
 	const navigate = useNavigate();
 
-	const onSubmit = async (e: React.FormEvent) => {
+	const onSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!roomName.trim() || !ownerPassword.trim()) return toast.error("Room name and owner password are required");
-		setLoading(true);
-		try {
-			const logged = await ownerLogin(roomName.trim(), ownerPassword.trim());
-			localStorage.setItem("ownerToken", logged.token);
-			localStorage.setItem("roomSlug", logged.roomSlug);
-			localStorage.setItem("roomName", logged.roomName);
-			toast.success("Owner authenticated");
-			navigate(`/dashboard/${logged.roomSlug}`);
-		} catch (error) {
-			toast.error("Owner login failed", {
-				description: error instanceof Error ? error.message : "Unknown error",
-			});
-		} finally {
-			setLoading(false);
+		const userToken = localStorage.getItem("userToken");
+		if (!userToken) {
+			toast.error("Login required to access dashboard");
+			navigate("/login");
+			return;
 		}
+		if (!roomName.trim()) return toast.error("Room name is required");
+		const roomSlug = slugify(roomName);
+		if (!roomSlug) {
+			toast.error("Invalid room name");
+			return;
+		}
+		localStorage.setItem("roomSlug", roomSlug);
+		toast.success("Opening dashboard");
+		navigate(`/dashboard/${encodeURIComponent(roomSlug)}`);
 	};
 
 	return (
 		<div className="mx-auto flex min-h-[72vh] w-full max-w-xl items-center">
 			<div className="w-full">
 				<div className="mb-8 text-center">
-					<h1 className="text-3xl font-bold">Owner login</h1>
-					<p className="mt-2 text-sm text-base-content/70">Access your private room dashboard.</p>
+					<h1 className="text-3xl font-bold">Open dashboard</h1>
+					<p className="mt-2 text-sm text-base-content/70">Your user login already authenticates dashboard access.</p>
 				</div>
 				<div className="card border border-base-300 bg-base-100 shadow-2xl">
 					<div className="card-body p-8">
 						<form onSubmit={onSubmit} className="flex flex-col gap-5">
 							<label className="form-control w-full">
 								<div className="label">
-									<span className="label-text font-medium">Room name</span>
+									<span className="label-text font-medium">Room name or slug</span>
 								</div>
 								<input className="input input-bordered w-full" value={roomName} onChange={(e) => setRoomName(e.target.value)} />
 							</label>
-							<label className="form-control w-full">
-								<div className="label">
-									<span className="label-text font-medium">Owner password</span>
-								</div>
-								<input
-									type="password"
-									className="input input-bordered w-full"
-									value={ownerPassword}
-									onChange={(e) => setOwnerPassword(e.target.value)}
-								/>
-							</label>
-							<button className="btn btn-primary mt-2 h-12 w-full text-base" disabled={loading}>
-								{loading && <span className="loading loading-spinner loading-sm" />}
-								Enter dashboard
+							<button className="btn btn-primary mt-2 h-12 w-full text-base" type="submit">
+								Open dashboard
 							</button>
 						</form>
 					</div>

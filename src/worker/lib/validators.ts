@@ -20,24 +20,10 @@ export const authHeaderSchema = z.object({
 	authorization: z.string().trim().min(1),
 });
 
-export const roomCreateSchema = z
-	.object({
-		roomName: handleString,
-		ownerPassword: trimmed(120).optional(),
-		password: trimmed(120).optional(),
-		joinPassword: z.string().trim().max(120).optional(),
-		ownerDisplayName: z.string().trim().max(60).optional(),
-	})
-	.transform((value) => ({
-		roomName: value.roomName,
-		ownerPassword: value.ownerPassword ?? value.password ?? "",
-		joinPassword: value.joinPassword || undefined,
-		ownerDisplayName: value.ownerDisplayName || "Owner",
-	}))
-	.refine((value) => value.ownerPassword.length > 0, {
-		message: "ownerPassword is required",
-		path: ["ownerPassword"],
-	});
+export const roomCreateSchema = z.object({
+	roomName: handleString,
+	joinPassword: z.string().trim().max(120).optional(),
+});
 
 export const ownerLoginSchema = z.object({
 	roomName: handleString,

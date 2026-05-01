@@ -163,7 +163,7 @@ export default function RoomDashboard() {
 
 				<aside className="card border border-base-300 bg-base-100 shadow-xl lg:col-span-4">
 					<div className="card-body">
-						<h3 className="card-title text-base">Owner session</h3>
+						<h3 className="card-title text-base">User session</h3>
 						<div className="space-y-2 text-sm">
 							<p>
 								Display name: <span className="font-medium">{localStorage.getItem("displayName") || "-"}</span>
@@ -172,7 +172,7 @@ export default function RoomDashboard() {
 								Member ID: <span className="font-mono text-xs">{localStorage.getItem("memberId") || "-"}</span>
 							</p>
 							<p>
-								Owner JWT: <span className="font-mono text-xs">{localStorage.getItem("ownerToken") ? "stored" : "missing"}</span>
+								User JWT: <span className="font-mono text-xs">{localStorage.getItem("userToken") ? "stored" : "missing"}</span>
 							</p>
 						</div>
 						<div className="divider my-2" />

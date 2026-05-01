@@ -36,21 +36,18 @@ function AppShell({
 						RoomPush
 					</Link>
 					<nav className="ml-auto flex items-center gap-1 md:gap-2">
-						<Link to="/create" className="btn btn-ghost btn-sm">
-							Create
-						</Link>
+						{isAuthenticated ? (
+							<Link to="/create" className="btn btn-ghost btn-sm">
+								Create
+							</Link>
+						) : null}
 						<Link to="/join" className="btn btn-ghost btn-sm">
 							Join
 						</Link>
 						{!isAuthenticated ? (
-							<>
-								<Link to="/register" className="btn btn-ghost btn-sm">
-									Register
-								</Link>
-								<Link to="/login" className="btn btn-ghost btn-sm">
-									Login
-								</Link>
-							</>
+							<Link to="/login" className="btn btn-primary btn-sm">
+								Login
+							</Link>
 						) : (
 							<>
 								<span className="badge badge-outline mr-1 hidden md:inline-flex">{username}</span>

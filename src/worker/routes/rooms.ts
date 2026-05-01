@@ -15,21 +15,16 @@ import {
 import {
 	createRoom,
 	getRoomStats,
+	isRoomOwnedByUser,
 	joinByName,
 	ownerLogin,
 	upsertRoomSubscription,
-	verifyOwnerToken,
 } from "../services/roomService";
 import { sendToProjectSubscribers } from "../services/pushService";
 import { verifyUserToken } from "../services/userService";
 import type { AppEnv } from "../types";
 
 const roomsApp = new Hono<AppEnv>();
-
-function getNormalizedRoomFromToken(payload: Record<string, unknown>): string {
-	const rawRoomSlug = typeof payload.roomSlug === "string" ? payload.roomSlug : "";
-	return slugify(rawRoomSlug);
-}
 
 const validateJson = (schema: ZodSchema, message: string) =>
 	zValidator("json", schema, (result) => {
@@ -43,7 +38,7 @@ const validateParam = (schema: ZodSchema) =>
 
 const validateHeader = (schema: ZodSchema) =>
 	zValidator("header", schema, (result) => {
-		if (!result.success) return jsonError("Missing owner token", 401);
+		if (!result.success) return jsonError("Missing Authorization header", 401);
 	});
 
 roomsApp.post(
@@ -56,7 +51,10 @@ roomsApp.post(
 	const user = await verifyUserToken(c, authorization.slice("Bearer ".length));
 	if (!user) return jsonError("Invalid user token", 401);
 	const body = c.req.valid("json") as z.infer<typeof roomCreateSchema>;
-	const room = await createRoom(c, user.userId, body);
+	const room = await createRoom(c, user.userId, {
+		...body,
+		ownerDisplayName: user.username,
+	});
 	return c.json({ ok: true, ...room });
 	},
 );
@@ -103,14 +101,14 @@ roomsApp.get("/:roomSlug/config", validateParam(roomSlugParamSchema), async (c) 
 
 roomsApp.get("/:roomSlug/dashboard", validateParam(roomSlugParamSchema), validateHeader(authHeaderSchema), async (c) => {
 	const { authorization } = c.req.valid("header") as z.infer<typeof authHeaderSchema>;
-	if (!authorization.startsWith("Bearer ")) return jsonError("Missing owner token", 401);
-	const payload = await verifyOwnerToken(c, authorization.slice("Bearer ".length));
-	if (!payload) return jsonError("Invalid owner token", 401);
+	if (!authorization.startsWith("Bearer ")) return jsonError("Missing user token", 401);
+	const user = await verifyUserToken(c, authorization.slice("Bearer ".length));
+	if (!user) return jsonError("Invalid user token", 401);
 	const roomSlug = slugify((c.req.valid("param") as z.infer<typeof roomSlugParamSchema>).roomSlug);
-	if (getNormalizedRoomFromToken(payload) !== roomSlug) return jsonError("Forbidden", 403);
+	const owned = await isRoomOwnedByUser(c, roomSlug, user.userId);
+	if (!owned) return jsonError("Forbidden", 403);
 	const stats = await getRoomStats(c, roomSlug);
 	if (!stats) return jsonError("Room not found", 404);
-	if (typeof payload.roomId === "string" && payload.roomId !== stats.roomId) return jsonError("Forbidden", 403);
 	return c.json({ ok: true, ...stats });
 });
 
@@ -121,14 +119,14 @@ roomsApp.post(
 	validateJson(sendPayloadSchema, "Invalid body"),
 	async (c) => {
 		const { authorization } = c.req.valid("header") as z.infer<typeof authHeaderSchema>;
-		if (!authorization.startsWith("Bearer ")) return jsonError("Missing owner token", 401);
-		const payload = await verifyOwnerToken(c, authorization.slice("Bearer ".length));
-	if (!payload) return jsonError("Invalid owner token", 401);
+		if (!authorization.startsWith("Bearer ")) return jsonError("Missing user token", 401);
+		const user = await verifyUserToken(c, authorization.slice("Bearer ".length));
+	if (!user) return jsonError("Invalid user token", 401);
 		const roomSlug = slugify((c.req.valid("param") as z.infer<typeof roomSlugParamSchema>).roomSlug);
-	if (getNormalizedRoomFromToken(payload) !== roomSlug) return jsonError("Forbidden", 403);
+	const owned = await isRoomOwnedByUser(c, roomSlug, user.userId);
+	if (!owned) return jsonError("Forbidden", 403);
 	const roomStats = await getRoomStats(c, roomSlug);
 	if (!roomStats) return jsonError("Room not found", 404);
-	if (typeof payload.roomId === "string" && payload.roomId !== roomStats.roomId) return jsonError("Forbidden", 403);
 		const body = c.req.valid("json") as z.infer<typeof sendPayloadSchema>;
 	const result = await sendToProjectSubscribers(c, roomStats.roomId, body);
 	return c.json({ ok: true, ...result });

@@ -1,14 +1,18 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { safeNextPath } from "../lib/nav";
 import { registerUser } from "../services/api";
 
 export default function UserRegister() {
+	const [searchParams] = useSearchParams();
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
 	const [loading, setLoading] = useState(false);
 	const navigate = useNavigate();
+	const nextParam = searchParams.get("next");
+	const loginHref = nextParam ? `/login?next=${encodeURIComponent(nextParam)}` : "/login";
 
 	const onSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -21,7 +25,7 @@ export default function UserRegister() {
 			localStorage.setItem("username", result.user.username);
 			window.dispatchEvent(new Event("auth-changed"));
 			toast.success("Account created");
-			navigate("/login");
+			navigate(safeNextPath(searchParams.get("next")));
 		} catch (error) {
 			toast.error("Register failed", {
 				description: error instanceof Error ? error.message : "Unknown error",
@@ -76,12 +80,19 @@ export default function UserRegister() {
 							</label>
 							<button
 								className="btn btn-primary mt-2 h-12 w-full text-base"
+								type="submit"
 								disabled={loading || !username.trim() || !password.trim() || password !== confirmPassword}
 							>
 								{loading && <span className="loading loading-spinner loading-sm" />}
-								Register
+								Create account
 							</button>
 						</form>
+						<p className="mt-6 text-center text-sm text-base-content/70">
+							Already have an account?{" "}
+							<Link to={loginHref} className="link link-primary font-medium">
+								Sign in
+							</Link>
+						</p>
 					</div>
 				</div>
 			</div>

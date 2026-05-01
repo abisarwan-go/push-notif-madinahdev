@@ -43,12 +43,7 @@ async function parseJson<T>(res: Response): Promise<T> {
 	return data;
 }
 
-export async function createRoom(payload: {
-	roomName: string;
-	ownerPassword: string;
-	joinPassword?: string;
-	ownerDisplayName?: string;
-}) {
+export async function createRoom(payload: { roomName: string; joinPassword?: string }) {
 	const token = localStorage.getItem("userToken") ?? "";
 	if (!token) throw new Error("Authentication required: login first");
 	const res = await rpcClient.v1.rooms.create.$post(
@@ -60,18 +55,8 @@ export async function createRoom(payload: {
 	return parseJson<RoomCreateResponse>(res);
 }
 
-export async function createRoomFromForm(
-	roomName: string,
-	ownerPassword: string,
-	joinPassword?: string,
-	ownerDisplayName = "Owner",
-) {
-	return createRoom({ roomName, ownerPassword, joinPassword, ownerDisplayName });
-}
-
-export async function ownerLogin(roomName: string, ownerPassword: string) {
-	const res = await rpcClient.v1.rooms.owner.login.$post({ json: { roomName, ownerPassword } });
-	return parseJson<{ ok: true; token: string; expiresInSec: number; roomSlug: string; roomName: string }>(res);
+export async function createRoomFromForm(roomName: string, joinPassword?: string) {
+	return createRoom({ roomName, joinPassword });
 }
 
 export async function joinRoom(roomName: string, displayName: string, joinPassword?: string) {
@@ -80,8 +65,8 @@ export async function joinRoom(roomName: string, displayName: string, joinPasswo
 }
 
 export async function getRoomStats(roomName: string) {
-	const token = localStorage.getItem("ownerToken") ?? "";
-	if (!token) throw new Error("Missing owner token");
+	const token = localStorage.getItem("userToken") ?? "";
+	if (!token) throw new Error("Missing user token");
 	const res = await rpcClient.v1.rooms[":roomSlug"].dashboard.$get(
 		{ param: { roomSlug: roomName } },
 		{
@@ -107,8 +92,8 @@ export async function subscribeDevice(roomSlug: string, payload: Record<string, 
 }
 
 export async function sendNotification(roomSlug: string, title: string, body: string) {
-	const token = localStorage.getItem("ownerToken") ?? "";
-	if (!token) throw new Error("Missing owner token in local storage");
+	const token = localStorage.getItem("userToken") ?? "";
+	if (!token) throw new Error("Missing user token in local storage");
 	const res = await rpcClient.v1.rooms[":roomSlug"].notifications.$post(
 		{
 			param: { roomSlug },

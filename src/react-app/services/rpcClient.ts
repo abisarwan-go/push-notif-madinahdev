@@ -13,7 +13,6 @@ export type RpcClient = {
 					options?: { headers?: Record<string, string> },
 				): Promise<Response>;
 			};
-			owner: { login: { $post(args: { json: unknown }): Promise<Response> } };
 			join: { $post(args: { json: unknown }): Promise<Response> };
 			":roomSlug": {
 				config: { $get(args: { param: { roomSlug: string } }): Promise<Response> };

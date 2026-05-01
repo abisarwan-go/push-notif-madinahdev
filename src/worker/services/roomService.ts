@@ -1,14 +1,14 @@
 import prismaClients from "../lib/prismaClient";
-import { sha256Hex, signJwtHS256, slugify, verifyJwtHS256 } from "../lib/crypto";
+import { randomToken, sha256Hex, signJwtHS256, slugify, verifyJwtHS256 } from "../lib/crypto";
 import type { AppContext, PushSubscriptionInput } from "../types";
 
 export async function createRoom(
 	c: AppContext,
 	ownerUserId: string,
-	input: { roomName: string; ownerPassword: string; joinPassword?: string; ownerDisplayName: string },
+	input: { roomName: string; joinPassword?: string; ownerDisplayName: string },
 ) {
 	const prisma = await prismaClients.fetch(c.env.DB);
-	const ownerPasswordHash = await sha256Hex(input.ownerPassword);
+	const ownerPasswordHash = await sha256Hex(randomToken(32));
 	const joinPasswordHash = input.joinPassword ? await sha256Hex(input.joinPassword) : null;
 	const slugBase = slugify(input.roomName) || "room";
 	let slug = slugBase;
@@ -94,6 +94,15 @@ export async function getRoomStats(c: AppContext, roomSlug: string) {
 		activeSubscriptions,
 		notifications,
 	};
+}
+
+export async function isRoomOwnedByUser(c: AppContext, roomSlug: string, userId: string): Promise<boolean> {
+	const prisma = await prismaClients.fetch(c.env.DB);
+	const room = await prisma.room.findFirst({
+		where: { slug: slugify(roomSlug) },
+		select: { ownerUserId: true },
+	});
+	return !!room && room.ownerUserId === userId;
 }
 
 export async function upsertRoomSubscription(
