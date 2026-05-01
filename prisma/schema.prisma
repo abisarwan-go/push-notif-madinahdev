@@ -23,18 +23,20 @@ model User {
 }
 
 model Room {
-  id                String         @id @default(uuid())
-  name              String         @unique
-  ownerUserId       String?
-  ownerPasswordHash String
-  joinPasswordHash  String?
-  vapidPublicKey    String
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  ownerUser         User?          @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
-  members           Member[]
-  subscriptions     Subscription[]
-  notifications     Notification[]
+  id                     String         @id @default(uuid())
+  name                   String         @unique
+  ownerUserId            String?
+  ownerPasswordHash      String
+  joinPasswordHash       String?
+  /** SHA-256 hex of plaintext integration secret (n8n / automation); null = disabled */
+  integrationSecretHash  String?
+  vapidPublicKey        String
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  ownerUser             User?          @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  members               Member[]
+  subscriptions         Subscription[]
+  notifications         Notification[]
 }
 
 model Member {

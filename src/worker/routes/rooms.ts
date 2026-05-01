@@ -20,7 +20,9 @@ import {
 	joinByName,
 	listRoomsForUser,
 	ownerLogin,
+	rotateRoomIntegrationSecret,
 	upsertRoomSubscription,
+	verifyRoomIntegrationSecret,
 } from "../services/roomService";
 import { sendToProjectSubscribers } from "../services/pushService";
 import { verifyUserToken } from "../services/userService";
@@ -140,6 +142,47 @@ roomsApp.get("/:roomName/dashboard", validateParam(roomNameParamSchema), validat
 });
 
 roomsApp.post(
+	"/:roomName/integrations/rotate",
+	validateParam(roomNameParamSchema),
+	validateHeader(authHeaderSchema),
+	async (c) => {
+		const { authorization } = c.req.valid("header") as z.infer<typeof authHeaderSchema>;
+		if (!authorization.startsWith("Bearer ")) return jsonError("Missing user token", 401);
+		const user = await verifyUserToken(c, authorization.slice("Bearer ".length));
+		if (!user) return jsonError("Invalid user token", 401);
+		const roomName = (c.req.valid("param") as z.infer<typeof roomNameParamSchema>).roomName;
+		const owned = await isRoomOwnedByUser(c, roomName, user.userId);
+		if (!owned) return jsonError("Forbidden", 403);
+		const out = await rotateRoomIntegrationSecret(c, roomName, user.userId);
+		if (!out) return jsonError("Room not found", 404);
+		const pushPath = `/v1/rooms/${encodeURIComponent(out.roomName)}/integrations/push`;
+		return c.json({
+			ok: true,
+			secret: out.secret,
+			roomName: out.roomName,
+			integrationPath: pushPath,
+			hint: "Store the secret in n8n credentials; it is shown only this once.",
+		});
+	},
+);
+
+roomsApp.post(
+	"/:roomName/integrations/push",
+	validateParam(roomNameParamSchema),
+	validateJson(sendPayloadSchema, "Invalid body"),
+	async (c) => {
+		const secret = c.req.header("x-room-integration-secret")?.trim();
+		if (!secret) return jsonError("Missing X-Room-Integration-Secret header", 401);
+		const roomName = (c.req.valid("param") as z.infer<typeof roomNameParamSchema>).roomName;
+		const verified = await verifyRoomIntegrationSecret(c, roomName, secret);
+		if (!verified) return jsonError("Invalid integration secret", 401);
+		const body = c.req.valid("json") as z.infer<typeof sendPayloadSchema>;
+		const result = await sendToProjectSubscribers(c, verified.roomId, verified.roomName, body);
+		return c.json({ ok: true, ...result });
+	},
+);
+
+roomsApp.post(
 	"/:roomName/notifications",
 	validateParam(roomNameParamSchema),
 	validateHeader(authHeaderSchema),
@@ -155,7 +198,7 @@ roomsApp.post(
 		const roomStats = await getRoomStats(c, roomName);
 		if (!roomStats) return jsonError("Room not found", 404);
 		const body = c.req.valid("json") as z.infer<typeof sendPayloadSchema>;
-		const result = await sendToProjectSubscribers(c, roomStats.roomId, body);
+		const result = await sendToProjectSubscribers(c, roomStats.roomId, roomStats.roomName, body);
 		return c.json({ ok: true, ...result });
 	},
 );

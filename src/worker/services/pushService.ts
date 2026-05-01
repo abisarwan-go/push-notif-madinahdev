@@ -7,7 +7,12 @@ function pushResponseDetail(res: Response): { statusCode: number; message: strin
 	return { statusCode, message: `HTTP ${res.status}` };
 }
 
-export async function sendToProjectSubscribers(c: AppContext, roomId: string, payload: SendPayload) {
+export async function sendToProjectSubscribers(
+	c: AppContext,
+	roomId: string,
+	roomNameForUrl: string,
+	payload: SendPayload,
+) {
 	const prisma = await prismaClients.fetch(c.env.DB);
 	const subscriptions = await prisma.subscription.findMany({ where: { roomId, status: "ACTIVE" } });
 	const notification = await prisma.notification.create({
@@ -22,10 +27,11 @@ export async function sendToProjectSubscribers(c: AppContext, roomId: string, pa
 	}
 
 	const vapid = vapidKeysFromEnv(c.env);
+	const defaultClickUrl = `/dashboard/${encodeURIComponent(roomNameForUrl)}`;
 	const payloadJson = {
 		title: payload.title,
 		body: payload.body,
-		url: payload.url?.trim() || "/",
+		url: payload.url?.trim() || defaultClickUrl,
 		tag: notification.id,
 	};
 

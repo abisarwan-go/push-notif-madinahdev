@@ -4,6 +4,14 @@ export async function sha256Hex(input: string): Promise<string> {
 	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** Constant-time string compare (e.g. hex digests of same length). */
+export function timingSafeEqualString(a: string, b: string): boolean {
+	if (a.length !== b.length) return false;
+	let diff = 0;
+	for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+	return diff === 0;
+}
+
 function bytesToBase64Url(bytes: Uint8Array): string {
 	let bin = "";
 	for (const b of bytes) bin += String.fromCharCode(b);

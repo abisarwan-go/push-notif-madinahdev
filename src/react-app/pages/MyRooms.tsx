@@ -1,6 +1,6 @@
 import { ChevronRight, DoorOpen, Home, Users } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { fetchMyRooms } from "../services/api";
 
@@ -19,14 +19,8 @@ export default function MyRooms() {
 	const [owned, setOwned] = useState<Array<{ id: string; name: string }>>([]);
 	const [joined, setJoined] = useState<Array<{ id: string; name: string }>>([]);
 	const [loading, setLoading] = useState(true);
-	const navigate = useNavigate();
 
 	useEffect(() => {
-		if (!localStorage.getItem("userToken")) {
-			toast.info("Sign in required");
-			navigate("/login?next=/rooms", { replace: true });
-			return;
-		}
 		let cancelled = false;
 		const run = async () => {
 			setLoading(true);
@@ -50,15 +44,7 @@ export default function MyRooms() {
 		return () => {
 			cancelled = true;
 		};
-	}, [navigate]);
-
-	if (!localStorage.getItem("userToken")) {
-		return (
-			<div className="flex min-h-[40vh] items-center justify-center px-4">
-				<span className="loading loading-lg loading-spinner text-primary" />
-			</div>
-		);
-	}
+	}, []);
 
 	return (
 		<div className="mx-auto w-full max-w-3xl space-y-8 px-4 py-6 sm:px-6 sm:py-8 lg:px-0">

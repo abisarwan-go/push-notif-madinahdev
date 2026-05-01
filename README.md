@@ -108,3 +108,14 @@ Common production errors and fixes:
 - Owner cannot open dashboard (`401`/`403`)
   - Cause: invalid/expired owner token or mismatched `ROOM_OWNER_JWT_SECRET`.
   - Fix: ensure one stable `ROOM_OWNER_JWT_SECRET` value across deploys and login again.
+
+### Push works on mobile but not on desktop (or the reverse)
+
+That is common and usually expected:
+
+- **Permissions**: each browser profile has its own notification permission. The site may be allowed on your phone but blocked or muted on macOS/Windows (check the lock icon / site settings for notifications).
+- **Per-device subscription**: Web Push registers a separate endpoint per browser/device. You must **join the room** (or complete subscribe flow) **in the desktop browser** you want to receive pushes on, not only on mobile.
+- **Browser / OS**: Safari desktop, corporate profiles, extensions, Focus / Do Not Disturb, or “quiet” hours can suppress banners even when the subscription is valid.
+- **Secure context**: push requires **HTTPS** or **`localhost`**; behaviour can differ if you test on plain HTTP on one device only.
+
+**Checklist:** same account, same room, permission “allow”, subscription created on that machine, HTTPS (or localhost), and VAPID keys correctly set on the Worker.

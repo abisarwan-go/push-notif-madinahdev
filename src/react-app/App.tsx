@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Link, Route, Routes, useNavigate } from "react-router-dom";
 import { Moon, Sun } from "lucide-react";
 import { Toaster } from "sonner";
 import "./App.css";
+import RequireAuth from "./components/RequireAuth";
 import Home from "./pages/Home";
 import CreateRoom from "./pages/CreateRoom";
 import JoinRoom from "./pages/JoinRoom";
@@ -45,11 +46,11 @@ function AppShell({
 								<Link to="/create" className="btn btn-ghost btn-xs sm:btn-sm">
 									Create
 								</Link>
+								<Link to="/join" className="btn btn-ghost btn-xs sm:btn-sm">
+									Join
+								</Link>
 							</>
 						) : null}
-						<Link to={isAuthenticated ? "/join" : "/login?next=/join"} className="btn btn-ghost btn-xs sm:btn-sm">
-							Join
-						</Link>
 						{!isAuthenticated ? (
 							<Link to="/login" className="btn btn-primary btn-xs sm:btn-sm">
 								Login
@@ -80,7 +81,8 @@ function AppShell({
 	);
 }
 
-export default function App() {
+function AppRoutes() {
+	const navigate = useNavigate();
 	const [theme, setTheme] = useState<ThemeMode>(() => {
 		const saved = localStorage.getItem("themeMode");
 		return saved === "light" || saved === "dim" ? saved : "light";
@@ -117,10 +119,11 @@ export default function App() {
 		localStorage.removeItem("ownerToken");
 		localStorage.removeItem("roomSlug");
 		window.dispatchEvent(new Event("auth-changed"));
+		navigate("/", { replace: true });
 	};
 
 	return (
-		<BrowserRouter>
+		<>
 			<AppShell
 				theme={theme}
 				onToggleTheme={toggleTheme}
@@ -130,16 +133,26 @@ export default function App() {
 			>
 				<Routes>
 					<Route path="/" element={<Home />} />
-					<Route path="/create" element={<CreateRoom />} />
-					<Route path="/join" element={<JoinRoom />} />
-					<Route path="/rooms" element={<MyRooms />} />
-					<Route path="/owner-login" element={<OwnerLogin />} />
 					<Route path="/register" element={<UserRegister />} />
 					<Route path="/login" element={<UserLogin />} />
-					<Route path="/dashboard/:roomName" element={<RoomDashboard />} />
+					<Route element={<RequireAuth />}>
+						<Route path="/create" element={<CreateRoom />} />
+						<Route path="/join" element={<JoinRoom />} />
+						<Route path="/rooms" element={<MyRooms />} />
+						<Route path="/owner-login" element={<OwnerLogin />} />
+						<Route path="/dashboard/:roomName" element={<RoomDashboard />} />
+					</Route>
 				</Routes>
 			</AppShell>
 			<Toaster theme={toasterTheme} position="top-center" richColors />
+		</>
+	);
+}
+
+export default function App() {
+	return (
+		<BrowserRouter>
+			<AppRoutes />
 		</BrowserRouter>
 	);
 }

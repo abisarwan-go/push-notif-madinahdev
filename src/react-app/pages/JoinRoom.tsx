@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { joinRoom, loadConfig, subscribeDevice } from "../services/api";
@@ -88,33 +88,43 @@ async function subscribePushForRoom(roomName: string, memberId: string, displayN
 }
 
 export default function JoinRoom() {
+	const supportsNotifications = typeof window !== "undefined" && "Notification" in window;
+	const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
+		supportsNotifications ? Notification.permission : "unsupported",
+	);
 	const [roomName, setRoomName] = useState(
 		localStorage.getItem("roomName") ?? localStorage.getItem("roomSlug") ?? "",
 	);
 	const [joinPassword, setJoinPassword] = useState("");
 	const [loading, setLoading] = useState(false);
-	const [hasUserToken, setHasUserToken] = useState(() => Boolean(localStorage.getItem("userToken")));
 	const navigate = useNavigate();
 
-	useEffect(() => {
-		const sync = () => setHasUserToken(Boolean(localStorage.getItem("userToken")));
-		window.addEventListener("auth-changed", sync);
-		return () => window.removeEventListener("auth-changed", sync);
-	}, []);
-
-	useEffect(() => {
-		if (!hasUserToken) {
-			toast.info("Sign in required", { description: "Joining a room uses your account username as member name." });
-			navigate("/login?next=/join", { replace: true });
+	const handleRequestPermission = async () => {
+		if (!supportsNotifications) {
+			toast.error("This browser does not support notifications.");
+			return;
 		}
-	}, [hasUserToken, navigate]);
+		try {
+			const result = await Notification.requestPermission();
+			setNotificationPermission(result);
+			if (result === "granted") {
+				toast.success("Notifications enabled for this browser.");
+				return;
+			}
+			if (result === "denied") {
+				toast.warning("Notifications blocked", {
+					description: "Enable notifications from browser site settings to receive pushes.",
+				});
+				return;
+			}
+			toast.info("Notification permission not granted yet.");
+		} catch {
+			toast.error("Could not request notification permission.");
+		}
+	};
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!localStorage.getItem("userToken")) {
-			navigate("/login?next=/join");
-			return;
-		}
 		if (!roomName.trim()) return toast.error("Room name is required");
 		setLoading(true);
 		let joined: Awaited<ReturnType<typeof joinRoom>>;
@@ -146,14 +156,6 @@ export default function JoinRoom() {
 			navigate(`/dashboard/${encodeURIComponent(joined.roomName)}`);
 		}
 	};
-
-	if (!hasUserToken) {
-		return (
-			<div className="mx-auto flex min-h-[50vh] w-full max-w-xl items-center justify-center px-4">
-				<span className="loading loading-lg loading-spinner text-primary" />
-			</div>
-		);
-	}
 
 	return (
 		<div className="mx-auto flex min-h-[72vh] w-full max-w-xl items-center px-4 sm:px-0">
@@ -193,6 +195,27 @@ export default function JoinRoom() {
 							</label>
 							<div className="alert alert-info alert-soft text-sm">
 								<span>Only room name and optional join password are sent. Your member name is your account username.</span>
+							</div>
+							<div className="rounded-lg border border-base-300 bg-base-200/40 p-3">
+								<div className="flex items-center justify-between gap-2">
+									<p className="text-sm">
+										Notifications:{" "}
+										<span className="font-medium">
+											{notificationPermission === "unsupported" ? "unsupported" : notificationPermission}
+										</span>
+									</p>
+									<button
+										type="button"
+										className="btn btn-outline btn-sm"
+										onClick={() => void handleRequestPermission()}
+										disabled={loading || notificationPermission === "granted" || !supportsNotifications}
+									>
+										Enable notifications
+									</button>
+								</div>
+								<p className="mt-2 text-xs text-base-content/60">
+									Click once before joining if you want to receive push notifications on this device.
+								</p>
 							</div>
 							<button className="btn btn-primary mt-1 h-12 w-full text-base" disabled={loading || !roomName.trim()}>
 								{loading && <span className="loading loading-spinner loading-sm" />}

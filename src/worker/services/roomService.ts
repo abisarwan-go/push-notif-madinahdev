@@ -1,5 +1,5 @@
 import prismaClients from "../lib/prismaClient";
-import { randomToken, sha256Hex, signJwtHS256, verifyJwtHS256 } from "../lib/crypto";
+import { randomToken, sha256Hex, signJwtHS256, timingSafeEqualString, verifyJwtHS256 } from "../lib/crypto";
 import type { AppContext, PushSubscriptionInput } from "../types";
 
 /** URL / storage key for room: lowercase, allow hyphen + underscore (legacy slug migration). */
@@ -96,7 +96,44 @@ export async function getRoomStats(c: AppContext, roomKey: string) {
 		membersCount,
 		activeSubscriptions,
 		notifications,
+		integrationConfigured: Boolean(room.integrationSecretHash),
 	};
+}
+
+/** Owner-only: generate a new integration secret (plaintext returned once); stored as SHA-256 hex. */
+export async function rotateRoomIntegrationSecret(
+	c: AppContext,
+	roomKey: string,
+	ownerUserId: string,
+): Promise<{ secret: string; roomName: string } | null> {
+	const prisma = await prismaClients.fetch(c.env.DB);
+	const name = normalizeRoomKey(roomKey);
+	const room = await prisma.room.findUnique({ where: { name } });
+	if (!room || room.ownerUserId !== ownerUserId) return null;
+	const secret = randomToken(48);
+	const integrationSecretHash = await sha256Hex(secret);
+	await prisma.room.update({
+		where: { id: room.id },
+		data: { integrationSecretHash },
+	});
+	return { secret, roomName: room.name };
+}
+
+export async function verifyRoomIntegrationSecret(
+	c: AppContext,
+	roomKey: string,
+	plaintextSecret: string,
+): Promise<{ roomId: string; roomName: string } | null> {
+	const prisma = await prismaClients.fetch(c.env.DB);
+	const name = normalizeRoomKey(roomKey);
+	const room = await prisma.room.findUnique({
+		where: { name },
+		select: { id: true, name: true, integrationSecretHash: true },
+	});
+	if (!room?.integrationSecretHash) return null;
+	const hash = await sha256Hex(plaintextSecret);
+	if (!timingSafeEqualString(hash, room.integrationSecretHash)) return null;
+	return { roomId: room.id, roomName: room.name };
 }
 
 export async function isRoomOwnedByUser(c: AppContext, roomKey: string, userId: string): Promise<boolean> {

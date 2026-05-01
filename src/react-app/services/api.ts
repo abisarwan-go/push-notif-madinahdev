@@ -39,7 +39,16 @@ type RoomStats = {
 	roomName: string;
 	membersCount: number;
 	activeSubscriptions: number;
+	integrationConfigured: boolean;
 	notifications: Array<{ id: string; title: string; body?: string; status: string; createdAt: string }>;
+};
+
+export type RotateIntegrationResponse = {
+	ok: true;
+	secret: string;
+	roomName: string;
+	integrationPath: string;
+	hint: string;
 };
 
 async function parseJson<T>(res: Response): Promise<T> {
@@ -126,6 +135,16 @@ export async function sendNotification(roomName: string, title: string, body: st
 		},
 	);
 	return parseJson<{ ok: true; sent: number; failed: number }>(res);
+}
+
+export async function rotateRoomIntegrationSecret(roomName: string) {
+	const token = localStorage.getItem("userToken") ?? "";
+	if (!token) throw new Error("Missing user token");
+	const res = await rpcClient.v1.rooms[":roomName"].integrations.rotate.$post(
+		{ param: { roomName } },
+		{ headers: { Authorization: `Bearer ${token}` } },
+	);
+	return parseJson<RotateIntegrationResponse>(res);
 }
 
 export async function registerUser(username: string, password: string) {

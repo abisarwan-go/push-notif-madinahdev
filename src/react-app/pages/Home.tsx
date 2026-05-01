@@ -33,19 +33,6 @@ export default function Home() {
 				</p>
 			</div>
 
-			<div className="flex flex-col items-center gap-4">
-				{!isAuthenticated && (
-					<div className="flex flex-col items-center gap-3">
-						<Link to="/login" className="btn btn-primary btn-lg px-10">
-							Sign in <ArrowRight className="h-4 w-4" />
-						</Link>
-						<p className="max-w-md text-center text-sm text-base-content/70">
-							Create and join rooms with one account — your username is your stable member identity.
-						</p>
-					</div>
-				)}
-			</div>
-
 			<div className="grid w-full max-w-3xl gap-4 md:grid-cols-2">
 				<Link
 					to={isAuthenticated ? "/create" : "/login?next=/create"}

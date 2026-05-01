@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { createRoomFromForm } from "../services/api";
@@ -7,30 +7,10 @@ export default function CreateRoom() {
 	const [name, setName] = useState("");
 	const [joinPassword, setJoinPassword] = useState("");
 	const [loading, setLoading] = useState(false);
-	const [hasUserToken, setHasUserToken] = useState(() => Boolean(localStorage.getItem("userToken")));
 	const navigate = useNavigate();
-
-	useEffect(() => {
-		const sync = () => setHasUserToken(Boolean(localStorage.getItem("userToken")));
-		window.addEventListener("auth-changed", sync);
-		return () => window.removeEventListener("auth-changed", sync);
-	}, []);
-
-	useEffect(() => {
-		if (!hasUserToken) {
-			toast.info("Sign in required", { description: "Create room is only available for signed-in accounts." });
-			navigate("/login?next=/create", { replace: true });
-		}
-	}, [hasUserToken, navigate]);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		const userToken = localStorage.getItem("userToken");
-		if (!userToken) {
-			toast.error("Login required to create a room");
-			navigate("/login?next=/create");
-			return;
-		}
 		if (!name.trim()) return toast.error("Room name is required");
 		setLoading(true);
 		try {
@@ -49,14 +29,6 @@ export default function CreateRoom() {
 			setLoading(false);
 		}
 	};
-
-	if (!hasUserToken) {
-		return (
-			<div className="mx-auto flex min-h-[50vh] w-full max-w-xl items-center justify-center px-4">
-				<span className="loading loading-lg loading-spinner text-primary" />
-			</div>
-		);
-	}
 
 	return (
 		<div className="mx-auto flex min-h-[72vh] w-full max-w-xl items-center px-4 sm:px-0">

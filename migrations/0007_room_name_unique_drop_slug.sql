@@ -1,4 +1,5 @@
--- Room: drop slug, enforce globally unique `name` (use former slug as name when migrating so existing rows stay unique).
+-- Room: drop slug, enforce globally unique `name` (canonical name = trim(slug)).
+-- Deduplicate when trim(slug) collides (e.g. slug "foo" vs " foo ") so CREATE UNIQUE INDEX never fails.
 PRAGMA foreign_keys=OFF;
 
 CREATE TABLE "new_Room" (
@@ -14,7 +15,18 @@ CREATE TABLE "new_Room" (
 );
 
 INSERT INTO "new_Room" ("id", "name", "ownerUserId", "ownerPasswordHash", "joinPasswordHash", "vapidPublicKey", "createdAt", "updatedAt")
-SELECT "id", "slug", "ownerUserId", "ownerPasswordHash", "joinPasswordHash", "vapidPublicKey", "createdAt", "updatedAt"
+SELECT
+	"id",
+	CASE
+		WHEN ROW_NUMBER() OVER (PARTITION BY trim("slug") ORDER BY datetime("createdAt"), "id") = 1 THEN trim("slug")
+		ELSE trim("slug") || '-' || replace("id", '-', '')
+	END,
+	"ownerUserId",
+	"ownerPasswordHash",
+	"joinPasswordHash",
+	"vapidPublicKey",
+	"createdAt",
+	"updatedAt"
 FROM "Room";
 
 DROP TABLE "Room";

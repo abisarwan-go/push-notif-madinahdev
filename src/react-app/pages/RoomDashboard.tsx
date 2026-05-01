@@ -1,8 +1,8 @@
-import { Activity, BellRing, History, RefreshCw, Send, Users } from "lucide-react";
+import { Activity, BellRing, ClipboardCopy, History, RefreshCw, Send, Users, Webhook } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { getRoomStats, sendNotification } from "../services/api";
+import { getRoomStats, rotateRoomIntegrationSecret, sendNotification } from "../services/api";
 
 type RoomStatsModel = {
 	viewerRole: "OWNER" | "MEMBER";
@@ -10,6 +10,7 @@ type RoomStatsModel = {
 	roomName: string;
 	membersCount: number;
 	activeSubscriptions: number;
+	integrationConfigured: boolean;
 	notifications: Array<{ id: string; title: string; body?: string; status: string; createdAt: string }>;
 };
 
@@ -21,6 +22,9 @@ export default function RoomDashboard() {
 	const [title, setTitle] = useState("");
 	const [message, setMessage] = useState("");
 	const [isSending, setIsSending] = useState(false);
+	const [integrationRotating, setIntegrationRotating] = useState(false);
+	const [integrationSecretOnce, setIntegrationSecretOnce] = useState<string | null>(null);
+	const [integrationPushPath, setIntegrationPushPath] = useState<string | null>(null);
 
 	const loadStats = useCallback(async () => {
 		if (!roomNameParam) return;
@@ -33,6 +37,7 @@ export default function RoomDashboard() {
 				roomName: data.roomName,
 				membersCount: data.membersCount,
 				activeSubscriptions: data.activeSubscriptions,
+				integrationConfigured: data.integrationConfigured,
 				notifications: data.notifications,
 			});
 		} catch (error) {
@@ -79,6 +84,48 @@ export default function RoomDashboard() {
 
 	const memberId = localStorage.getItem("memberId");
 	const accountUsername = localStorage.getItem("username") ?? "";
+
+	const integrationPushUrl = useMemo(() => {
+		const path =
+			integrationPushPath ?? `/v1/rooms/${encodeURIComponent(stats?.roomName ?? roomNameParam)}/integrations/push`;
+		if (typeof window === "undefined") return path;
+		return `${window.location.origin}${path}`;
+	}, [integrationPushPath, roomNameParam, stats?.roomName]);
+
+	const integrationCurlExample = useMemo(() => {
+		const secret = integrationSecretOnce ?? "YOUR_SECRET_HERE";
+		const body = JSON.stringify({ title: "n8n", body: "Hello from automation" });
+		return `curl -sS -X POST '${integrationPushUrl}' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-Room-Integration-Secret: ${secret}' \\\n  -d '${body}'`;
+	}, [integrationPushUrl, integrationSecretOnce]);
+
+	const copyText = async (label: string, text: string) => {
+		try {
+			await navigator.clipboard.writeText(text);
+			toast.success(`${label} copied`);
+		} catch {
+			toast.error("Could not copy to clipboard");
+		}
+	};
+
+	const handleRotateIntegration = async () => {
+		if (!roomNameParam) return toast.error("Missing room in URL");
+		setIntegrationRotating(true);
+		try {
+			const out = await rotateRoomIntegrationSecret(roomNameParam);
+			setIntegrationSecretOnce(out.secret);
+			setIntegrationPushPath(out.integrationPath);
+			await loadStats();
+			toast.success("New integration secret", {
+				description: "Copy it now — the server will not show it again.",
+			});
+		} catch (error) {
+			toast.error("Could not rotate integration secret", {
+				description: error instanceof Error ? error.message : "Unknown error",
+			});
+		} finally {
+			setIntegrationRotating(false);
+		}
+	};
 
 	return (
 		<div className="min-w-0 space-y-4 sm:space-y-6">
@@ -232,7 +279,84 @@ export default function RoomDashboard() {
 
 				{isOwner ? (
 					<aside className="card border border-base-300 bg-base-100 shadow-xl lg:col-span-4">
-						<div className="card-body p-4 sm:p-6">
+						<div className="card-body gap-4 p-4 sm:p-6">
+							<div>
+								<h3 className="card-title text-base">
+									<Webhook className="h-4 w-4" />
+									Automation / n8n
+								</h3>
+								<p className="mt-1 text-xs text-base-content/70">
+									POST with header <code className="text-[0.7rem]">X-Room-Integration-Secret</code> (no user JWT). Rotating
+									instantly invalidates the previous secret.
+								</p>
+								<p className="mt-2 text-xs">
+									Status:{" "}
+									<span className="font-medium">{stats?.integrationConfigured ? "Secret configured" : "Not set yet"}</span>
+								</p>
+								<button
+									type="button"
+									className="btn btn-outline btn-sm mt-3 w-full gap-2"
+									disabled={integrationRotating}
+									onClick={() => void handleRotateIntegration()}
+								>
+									{integrationRotating ? <span className="loading loading-spinner loading-xs" /> : null}
+									{stats?.integrationConfigured ? "Rotate integration secret" : "Generate integration secret"}
+								</button>
+							</div>
+
+							<div className="divider my-0" />
+
+							<div className="space-y-2 text-xs">
+								<p className="font-medium text-sm">Push URL</p>
+								<div className="flex gap-1">
+									<input readOnly className="input input-bordered input-xs min-w-0 flex-1 font-mono" value={integrationPushUrl} />
+									<button
+										type="button"
+										className="btn btn-ghost btn-xs shrink-0 px-2"
+										aria-label="Copy push URL"
+										onClick={() => void copyText("URL", integrationPushUrl)}
+									>
+										<ClipboardCopy className="h-3.5 w-3.5" />
+									</button>
+								</div>
+								{integrationSecretOnce ? (
+									<>
+										<p className="pt-2 font-medium text-sm text-warning">Secret (shown once)</p>
+										<div className="flex gap-1">
+											<input readOnly className="input input-bordered input-xs min-w-0 flex-1 font-mono" value={integrationSecretOnce} />
+											<button
+												type="button"
+												className="btn btn-ghost btn-xs shrink-0 px-2"
+												aria-label="Copy secret"
+												onClick={() => void copyText("Secret", integrationSecretOnce)}
+											>
+												<ClipboardCopy className="h-3.5 w-3.5" />
+											</button>
+										</div>
+										<p className="pt-2 font-medium text-sm">Example curl</p>
+										<pre className="max-h-40 overflow-auto rounded-lg bg-base-200 p-2 text-[0.65rem] leading-relaxed">{integrationCurlExample}</pre>
+										<button
+											type="button"
+											className="btn btn-ghost btn-xs w-full"
+											onClick={() => void copyText("curl", integrationCurlExample)}
+										>
+											Copy curl command
+										</button>
+										<button
+											type="button"
+											className="btn btn-ghost btn-xs w-full text-base-content/60"
+											onClick={() => setIntegrationSecretOnce(null)}
+										>
+											Dismiss secret from this screen
+										</button>
+									</>
+								) : (
+									<p className="text-base-content/50">Generate or rotate a secret to see a copy-ready curl example with your token.</p>
+								)}
+							</div>
+
+							<div className="divider my-0" />
+
 							<h3 className="card-title text-base">Session</h3>
 							<div className="space-y-2 text-sm">
 								<p>

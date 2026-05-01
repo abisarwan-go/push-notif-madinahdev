@@ -12,12 +12,6 @@ export default function OwnerLogin() {
 
 	const onSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		const userToken = localStorage.getItem("userToken");
-		if (!userToken) {
-			toast.error("Login required to access dashboard");
-			navigate("/login");
-			return;
-		}
 		if (!roomName.trim()) return toast.error("Room name is required");
 		const key = normalizeRoomKey(roomName);
 		if (!key || !/^[a-z0-9_-]+$/.test(key)) {

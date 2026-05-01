@@ -40,6 +40,20 @@ export type RpcClient = {
 						options?: { headers?: Record<string, string> },
 					): Promise<Response>;
 				};
+				integrations: {
+					rotate: {
+						$post(
+							args: { param: { roomName: string } },
+							options?: { headers?: Record<string, string> },
+						): Promise<Response>;
+					};
+					push: {
+						$post(
+							args: { param: { roomName: string }; json: unknown },
+							options?: { headers?: Record<string, string> },
+						): Promise<Response>;
+					};
+				};
 			};
 		};
 	};
