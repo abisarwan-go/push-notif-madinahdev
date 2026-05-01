@@ -23,6 +23,9 @@ async function ensureNotificationPermissionForPush(): Promise<void> {
 	if (!("Notification" in window)) {
 		throw new Error("This browser does not support web notifications.");
 	}
+	if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+		throw new Error("Push is not supported in this browser context. On iPhone/iPad, install the app to Home Screen and reopen it.");
+	}
 	let perm = Notification.permission;
 	if (perm === "denied") {
 		throw new Error(
@@ -126,6 +129,17 @@ export default function JoinRoom() {
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!roomName.trim()) return toast.error("Room name is required");
+
+		// Important: request permission immediately from the click gesture (before any async network call).
+		if (supportsNotifications && notificationPermission === "default") {
+			try {
+				const nextPermission = await Notification.requestPermission();
+				setNotificationPermission(nextPermission);
+			} catch {
+				// Keep flow going: room join should still work even if permission prompt fails.
+			}
+		}
+
 		setLoading(true);
 		let joined: Awaited<ReturnType<typeof joinRoom>>;
 		try {
@@ -147,6 +161,9 @@ export default function JoinRoom() {
 			toast.success("Joined and subscribed", { description: "You will receive push notifications for this room." });
 		} catch (error) {
 			const msg = describePushSetupFailure(error);
+			if (supportsNotifications) {
+				setNotificationPermission(Notification.permission);
+			}
 			toast.warning("Joined the room — push not enabled yet", {
 				description: `${msg} You can still use the room dashboard; use Join from the menu again after allowing notifications if you want pushes.`,
 				duration: 9000,
