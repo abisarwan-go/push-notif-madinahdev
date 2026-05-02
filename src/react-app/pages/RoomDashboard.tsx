@@ -2,6 +2,7 @@ import { Activity, BellRing, ClipboardCopy, History, RefreshCw, Send, Users, Web
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { describePushSetupFailure, joinRoomAndSubscribePush } from "../lib/pushSubscription";
 import { getRoomStats, rotateRoomIntegrationSecret, sendNotification } from "../services/api";
 
 type RoomStatsModel = {
@@ -25,6 +26,8 @@ export default function RoomDashboard() {
 	const [integrationRotating, setIntegrationRotating] = useState(false);
 	const [integrationSecretOnce, setIntegrationSecretOnce] = useState<string | null>(null);
 	const [integrationPushPath, setIntegrationPushPath] = useState<string | null>(null);
+	const [deviceJoinPassword, setDeviceJoinPassword] = useState("");
+	const [devicePushLoading, setDevicePushLoading] = useState(false);
 
 	const loadStats = useCallback(async () => {
 		if (!roomNameParam) return;
@@ -106,6 +109,33 @@ export default function RoomDashboard() {
 			toast.error("Could not copy to clipboard");
 		}
 	};
+
+	const handleRegisterThisDevice = useCallback(async () => {
+		if (!stats?.roomName) return;
+		if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+			try {
+				await Notification.requestPermission();
+			} catch {
+				// ignore
+			}
+		}
+		setDevicePushLoading(true);
+		try {
+			await joinRoomAndSubscribePush(stats.roomName, deviceJoinPassword.trim() || undefined);
+			toast.success("This browser is now registered for push");
+			setDeviceJoinPassword("");
+			await loadStats();
+		} catch (error) {
+			const raw = error instanceof Error ? error.message : "Unknown error";
+			if (/wrong join password|join password|401|403/i.test(raw)) {
+				toast.error("Could not join room for push", { description: raw });
+			} else {
+				toast.error("Push registration failed", { description: describePushSetupFailure(error) });
+			}
+		} finally {
+			setDevicePushLoading(false);
+		}
+	}, [stats?.roomName, deviceJoinPassword, loadStats]);
 
 	const handleRotateIntegration = async () => {
 		if (!roomNameParam) return toast.error("Missing room in URL");
@@ -208,6 +238,47 @@ export default function RoomDashboard() {
 				</div>
 			</div>
 
+			{stats?.viewerRole ? (
+				<div className="card border border-base-300 bg-base-100 shadow-md">
+					<div className="card-body gap-3 p-4 sm:p-5">
+						<h3 className="card-title text-base">
+							<BellRing className="h-4 w-4" />
+							This device (push)
+						</h3>
+						<p className="text-sm text-base-content/70">
+							Owning or creating a room does not register push on this browser. Use the button below (or the Join page) once per device so
+							<strong> Active subscribers</strong> increases.
+						</p>
+						<p className="text-xs text-base-content/60">
+							iPhone/iPad: add the site to Home Screen and open it from there; then tap the button again.
+						</p>
+						<label className="form-control w-full max-w-md">
+							<div className="label py-0">
+								<span className="label-text text-xs">Join password (only if this room is protected)</span>
+							</div>
+							<input
+								type="password"
+								className="input input-bordered input-sm w-full min-w-0"
+								placeholder="Leave empty if the room has no join password"
+								value={deviceJoinPassword}
+								onChange={(e) => setDeviceJoinPassword(e.target.value)}
+								disabled={devicePushLoading}
+								autoComplete="off"
+							/>
+						</label>
+						<button
+							type="button"
+							className="btn btn-secondary btn-sm w-full gap-2 sm:w-auto"
+							disabled={devicePushLoading || isLoadingStats || !stats || !roomNameParam}
+							onClick={() => void handleRegisterThisDevice()}
+						>
+							{devicePushLoading ? <span className="loading loading-spinner loading-xs" /> : null}
+							Register this browser for push
+						</button>
+					</div>
+				</div>
+			) : null}
+
 			<div className={`grid min-w-0 gap-6 ${isOwner ? "lg:grid-cols-12" : ""}`}>
 				<section
 					className={`card border border-base-300 bg-base-100 shadow-xl ${isOwner ? "lg:col-span-8" : "lg:col-span-12"}`}
@@ -219,6 +290,14 @@ export default function RoomDashboard() {
 								<p className="text-sm text-base-content/70">
 									Send a push notification to all active subscribers in this room.
 								</p>
+								{stats && stats.activeSubscriptions === 0 ? (
+									<div className="alert alert-warning alert-soft text-sm">
+										<span>
+											<strong>No active subscribers yet.</strong> Broadcasts will show as FAILED until at least one browser completes push
+											registration (Join page or &quot;Register this browser for push&quot; above).
+										</span>
+									</div>
+								) : null}
 								<form onSubmit={handleSendNotification} className="mt-2 space-y-4">
 									<label className="form-control w-full">
 										<div className="label">
@@ -370,8 +449,7 @@ export default function RoomDashboard() {
 									Member ID: <span className="font-mono text-xs">{memberId || "—"}</span>
 								</p>
 								<p className="text-xs text-base-content/60">
-									Member ID appears after you <strong>join</strong> this room on this device. Empty here as owner-only visitor is
-									normal.
+									Member ID is set when you <strong>join</strong> this room or use <strong>Register this browser for push</strong> on this device.
 								</p>
 								<p>
 									User JWT: <span className="font-mono text-xs">{localStorage.getItem("userToken") ? "stored" : "missing"}</span>

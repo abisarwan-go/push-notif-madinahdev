@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { describePushSetupFailure, joinRoomAndSubscribePush } from "../lib/pushSubscription";
 import { createRoomFromForm } from "../services/api";
 
 export default function CreateRoom() {
@@ -12,6 +13,16 @@ export default function CreateRoom() {
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!name.trim()) return toast.error("Room name is required");
+
+		// Keep permission tied to the button click (important on Android before any long async work).
+		if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+			try {
+				await Notification.requestPermission();
+			} catch {
+				// ignore
+			}
+		}
+
 		setLoading(true);
 		try {
 			const result = await createRoomFromForm(name.trim(), joinPassword.trim() || undefined);
@@ -19,7 +30,17 @@ export default function CreateRoom() {
 			localStorage.removeItem("roomSlug");
 			const accountName = localStorage.getItem("username") ?? "";
 			if (accountName) localStorage.setItem("displayName", accountName);
-			toast.success("Room created successfully");
+
+			try {
+				await joinRoomAndSubscribePush(result.roomName, joinPassword.trim() || undefined);
+				toast.success("Room created", { description: "This device is registered for push notifications." });
+			} catch (pushErr) {
+				toast.warning("Room created — push not enabled on this device yet", {
+					description: `${describePushSetupFailure(pushErr)} Open the room dashboard and use “Register this browser for push”, or the Join page.`,
+					duration: 10000,
+				});
+			}
+
 			navigate(`/dashboard/${encodeURIComponent(result.roomName)}`);
 		} catch (error) {
 			toast.error("Failed to create room", {
