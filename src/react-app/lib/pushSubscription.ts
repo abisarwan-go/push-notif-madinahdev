@@ -65,9 +65,8 @@ export function describePushSetupFailure(error: unknown): string {
 }
 
 async function buildWebPushSubscription(roomName: string): Promise<{ endpoint: string; p256dh: string; auth: string }> {
-	const config = await loadConfig(roomName);
 	if (!("serviceWorker" in navigator)) throw new Error("Service Worker not supported in this browser");
-	await assertServiceWorkerScriptIsReachable();
+	const [config] = await Promise.all([loadConfig(roomName), assertServiceWorkerScriptIsReachable()]);
 	const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
 	await navigator.serviceWorker.ready;
 	let pushSub = await registration.pushManager.getSubscription();

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { BrowserRouter, Link, Route, Routes, useNavigate } from "react-router-dom";
 import { Moon, Sun } from "lucide-react";
 import { Toaster } from "sonner";
@@ -15,7 +15,7 @@ import UserLogin from "./pages/UserLogin";
 
 type ThemeMode = "light" | "dim";
 
-function AppShell({
+const AppShell = memo(function AppShell({
 	children,
 	theme,
 	onToggleTheme,
@@ -23,7 +23,7 @@ function AppShell({
 	username,
 	onLogout,
 }: {
-	children: React.ReactNode;
+	children: ReactNode;
 	theme: ThemeMode;
 	onToggleTheme: () => void;
 	isAuthenticated: boolean;
@@ -79,7 +79,7 @@ function AppShell({
 			</footer>
 		</div>
 	);
-}
+});
 
 function AppRoutes() {
 	const navigate = useNavigate();
@@ -112,15 +112,17 @@ function AppRoutes() {
 	}, []);
 
 	const toasterTheme = useMemo(() => (theme === "light" ? "light" : "dark"), [theme]);
-	const toggleTheme = () => setTheme((prev) => (prev === "light" ? "dim" : "light"));
-	const logout = () => {
+	const toggleTheme = useCallback(() => {
+		setTheme((prev) => (prev === "light" ? "dim" : "light"));
+	}, []);
+	const logout = useCallback(() => {
 		localStorage.removeItem("userToken");
 		localStorage.removeItem("username");
 		localStorage.removeItem("ownerToken");
 		localStorage.removeItem("roomSlug");
 		window.dispatchEvent(new Event("auth-changed"));
 		navigate("/", { replace: true });
-	};
+	}, [navigate]);
 
 	return (
 		<>
