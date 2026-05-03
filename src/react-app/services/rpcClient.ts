@@ -27,6 +27,12 @@ export type RpcClient = {
 			};
 			":roomName": {
 				config: { $get(args: { param: { roomName: string } }): Promise<Response> };
+				"push-subscribe": {
+					$post(
+						args: { param: { roomName: string }; json: unknown },
+						options: { headers: Record<string, string> },
+					): Promise<Response>;
+				};
 				subscribe: { $post(args: { param: { roomName: string }; json: unknown }): Promise<Response> };
 				dashboard: {
 					$get(

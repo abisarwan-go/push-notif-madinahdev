@@ -29,6 +29,10 @@ Get started in minutes with local development or deploy directly via the Cloudfl
 
 <!-- dash-content-end -->
 
+## Documentation
+
+- [Push notifications (Web Push + VAPID)](docs/NOTIFICATIONS_PUSH.md) — how browser push works in this app and how it relates to FCM without using the Firebase SDK.
+
 ## Getting Started
 
 To start a new project with this template, run:

@@ -1,4 +1,4 @@
-import { joinRoom, loadConfig, subscribeDevice } from "../services/api";
+import { loadConfig, subscribeDevice, subscribeDeviceWithUserToken } from "../services/api";
 
 function isValidVapidPublicKey(value: string): boolean {
 	const trimmed = value.trim();
@@ -64,11 +64,7 @@ export function describePushSetupFailure(error: unknown): string {
 	return raw;
 }
 
-/**
- * Registers this browser for Web Push for the given room (after caller has ensured JWT / membership via joinRoom).
- */
-export async function subscribePushForRoom(roomName: string, memberId: string, displayName: string): Promise<void> {
-	await ensureNotificationPermissionForPush();
+async function buildWebPushSubscription(roomName: string): Promise<{ endpoint: string; p256dh: string; auth: string }> {
 	const config = await loadConfig(roomName);
 	if (!("serviceWorker" in navigator)) throw new Error("Service Worker not supported in this browser");
 	await assertServiceWorkerScriptIsReachable();
@@ -96,24 +92,32 @@ export async function subscribePushForRoom(roomName: string, memberId: string, d
 		keys?: { p256dh?: string; auth?: string };
 	};
 	if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) throw new Error("Invalid subscription payload");
+	return { endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth };
+}
+
+/**
+ * Registers this browser for Web Push for the given room (after caller has ensured JWT / membership via joinRoom).
+ */
+export async function subscribePushForRoom(roomName: string, memberId: string, displayName: string): Promise<void> {
+	await ensureNotificationPermissionForPush();
+	const keys = await buildWebPushSubscription(roomName);
 	await subscribeDevice(roomName, {
-		endpoint: json.endpoint,
-		p256dh: json.keys.p256dh,
-		auth: json.keys.auth,
+		...keys,
 		memberId,
 		displayName,
 		userAgent: navigator.userAgent,
 	});
 }
 
-/** Re-joins the room (upserts member) then registers push — use from dashboard so owners are not stuck at 0 subscribers. */
-export async function joinRoomAndSubscribePush(roomName: string, joinPassword?: string): Promise<void> {
-	// Ask for notification permission before any other async work so mobile browsers keep it user-gesture-safe.
+/**
+ * Registers push for the logged-in dashboard user; server resolves memberId (no join password).
+ */
+export async function subscribePushForCurrentSession(roomName: string): Promise<void> {
 	await ensureNotificationPermissionForPush();
-	const joined = await joinRoom(roomName, joinPassword);
-	localStorage.setItem("roomName", joined.roomName);
-	localStorage.removeItem("roomSlug");
-	localStorage.setItem("displayName", joined.displayName);
-	localStorage.setItem("memberId", joined.memberId);
-	await subscribePushForRoom(joined.roomName, joined.memberId, joined.displayName);
+	const keys = await buildWebPushSubscription(roomName);
+	const out = await subscribeDeviceWithUserToken(roomName, {
+		...keys,
+		userAgent: navigator.userAgent,
+	});
+	if (out.memberId) localStorage.setItem("memberId", out.memberId);
 }

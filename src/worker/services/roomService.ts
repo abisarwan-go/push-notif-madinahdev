@@ -205,6 +205,44 @@ export async function upsertRoomSubscription(
 	return { ok: true };
 }
 
+/** Dashboard / JWT: same as subscribe but memberId comes from DB (no join password). */
+export async function upsertRoomSubscriptionForDashboardUser(
+	c: AppContext,
+	roomKey: string,
+	userId: string,
+	username: string,
+	payload: PushSubscriptionInput,
+): Promise<{ ok: true; memberId: string } | { error: string }> {
+	const prisma = await prismaClients.fetch(c.env.DB);
+	const name = normalizeRoomKey(roomKey);
+	const room = await prisma.room.findUnique({
+		where: { name },
+		select: { id: true },
+	});
+	if (!room) return { error: "Room not found" };
+
+	const viewerRole = await getDashboardViewerRole(c, roomKey, userId, username);
+	if (!viewerRole) return { error: "Forbidden" };
+
+	const member = await prisma.member.findFirst({
+		where: { roomId: room.id, displayName: username },
+		select: { id: true },
+	});
+	if (!member) return { error: "Not a room member; use Join first" };
+
+	const merged: PushSubscriptionInput = {
+		endpoint: payload.endpoint,
+		p256dh: payload.p256dh,
+		auth: payload.auth,
+		userAgent: payload.userAgent,
+		memberId: member.id,
+		displayName: username,
+	};
+	const out = await upsertRoomSubscription(c, roomKey, merged, undefined);
+	if ("error" in out) return out;
+	return { ok: true, memberId: member.id };
+}
+
 export async function listRoomsForUser(c: AppContext, userId: string, username: string) {
 	const prisma = await prismaClients.fetch(c.env.DB);
 	const owned = await prisma.room.findMany({

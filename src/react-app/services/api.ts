@@ -120,6 +120,17 @@ export async function subscribeDevice(roomName: string, payload: Record<string, 
 	return parseJson<{ ok: true }>(res);
 }
 
+/** JWT-authenticated push registration (dashboard / create flow); server resolves memberId. */
+export async function subscribeDeviceWithUserToken(roomName: string, payload: Record<string, unknown>) {
+	const token = localStorage.getItem("userToken") ?? "";
+	if (!token) throw new Error("Missing user token");
+	const res = await rpcClient.v1.rooms[":roomName"]["push-subscribe"].$post(
+		{ param: { roomName }, json: payload },
+		{ headers: { Authorization: `Bearer ${token}` } },
+	);
+	return parseJson<{ ok: true; memberId: string }>(res);
+}
+
 export async function sendNotification(roomName: string, title: string, body: string) {
 	const token = localStorage.getItem("userToken") ?? "";
 	if (!token) throw new Error("Missing user token in local storage");

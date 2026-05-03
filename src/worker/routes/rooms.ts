@@ -22,6 +22,7 @@ import {
 	ownerLogin,
 	rotateRoomIntegrationSecret,
 	upsertRoomSubscription,
+	upsertRoomSubscriptionForDashboardUser,
 	verifyRoomIntegrationSecret,
 } from "../services/roomService";
 import { sendToProjectSubscribers } from "../services/pushService";
@@ -101,6 +102,34 @@ roomsApp.post(
 		if (joined === null) return jsonError("Room not found", 404);
 		if (joined === false) return jsonError("Wrong join password", 401);
 		return c.json({ ok: true, ...joined });
+	},
+);
+
+roomsApp.post(
+	"/:roomName/push-subscribe",
+	validateParam(roomNameParamSchema),
+	validateHeader(authHeaderSchema),
+	validateJson(subscriptionSchema, "Invalid subscription payload"),
+	async (c) => {
+		const { authorization } = c.req.valid("header") as z.infer<typeof authHeaderSchema>;
+		if (!authorization.startsWith("Bearer ")) return jsonError("Missing user token", 401);
+		const user = await verifyUserToken(c, authorization.slice("Bearer ".length));
+		if (!user) return jsonError("Invalid user token", 401);
+		const roomName = (c.req.valid("param") as z.infer<typeof roomNameParamSchema>).roomName;
+		const body = c.req.valid("json") as z.infer<typeof subscriptionSchema>;
+		const result = await upsertRoomSubscriptionForDashboardUser(c, roomName, user.userId, user.username, {
+			endpoint: body.endpoint,
+			p256dh: body.p256dh,
+			auth: body.auth,
+			userAgent: body.userAgent,
+		});
+		if ("error" in result) {
+			const msg = result.error;
+			if (msg === "Forbidden" || msg.startsWith("Not a room member")) return jsonError(msg, 403);
+			if (msg === "Room not found") return jsonError(msg, 404);
+			return jsonError(msg, 400);
+		}
+		return c.json({ ok: true, memberId: result.memberId });
 	},
 );
 
